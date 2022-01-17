@@ -334,10 +334,16 @@ https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.0/jar
   <artifactId>ic4j-agent</artifactId>
   <version>0.6.0</version>
 </dependency>
+<dependency>
+  <groupId>org.ic4j</groupId>
+  <artifactId>ic4j-candid</artifactId>
+  <version>0.6.0</version>
+</dependency>
 ```
 
 ```
 implementation 'org.ic4j:ic4j-agent:0.6.0'
+implementation 'org.ic4j:ic4j-candid:0.6.0'
 ```
 
 
