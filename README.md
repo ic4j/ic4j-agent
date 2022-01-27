@@ -100,12 +100,12 @@ Security.addProvider(new BouncyCastleProvider());
 ### HTTP Transport
 
 ```
-Transport transport = ReplicaApacheHttpTransport.create("http://localhost:8000");
+ReplicaTransport transport = ReplicaApacheHttpTransport.create("http://localhost:8000");
 ```
 or for Android
 
 ```
-Transport transport = ReplicaOkHttpTransport.create("http://localhost:8000");
+ReplicaTransport transport = ReplicaOkHttpTransport.create("http://localhost:8000");
 ```
 
 ## Agent Class
