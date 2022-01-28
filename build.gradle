@@ -13,7 +13,7 @@ plugins {
 
 
 group 'org.ic4j'
-version '0.6.0'
+version '0.6.1'
 
 sourceCompatibility = 1.8
 
@@ -47,10 +47,11 @@ test {
     useJUnitPlatform()
     
     exclude '**/*ICTest*'
+    exclude '**/*LoanTest*'
 }
 
 dependencies {
-	implementation group: 'org.ic4j', name: 'ic4j-candid', version: '0.6.0'
+	implementation group: 'org.ic4j', name: 'ic4j-candid', version: '0.6.1'
 	
 	// https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
 	implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'

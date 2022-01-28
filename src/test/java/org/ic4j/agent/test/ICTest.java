@@ -34,6 +34,7 @@ import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.candid.parser.IDLArgs;
 import org.ic4j.candid.parser.IDLType;
 import org.ic4j.candid.parser.IDLValue;
+import org.ic4j.candid.types.Label;
 import org.ic4j.types.Principal;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -105,11 +106,11 @@ public class ICTest {
 				}
 
 				// Record
-				Map<String, Object> mapValue = new HashMap<String, Object>();
+				Map<Label, Object> mapValue = new HashMap<Label, Object>();
 
-				mapValue.put("bar", new Boolean(true));
+				mapValue.put(Label.createNamedLabel("bar"), new Boolean(true));
 
-				mapValue.put("foo", BigInteger.valueOf(42));
+				mapValue.put(Label.createNamedLabel("foo"), BigInteger.valueOf(42));
 
 				args = new ArrayList<IDLValue>();
 

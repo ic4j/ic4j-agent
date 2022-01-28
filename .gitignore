@@ -3,3 +3,5 @@
 /secring.gpg
 /.settings/
 /bin/
+/build-export.gradle
+/gradle.properties
