@@ -4,7 +4,6 @@ package org.ic4j.agent.test;
 import java.math.BigInteger;
 import org.ic4j.candid.annotations.Name;
 import org.ic4j.candid.types.Type;
-import org.ic4j.types.Principal;
 import org.ic4j.candid.annotations.Field;
 
 public class LoanApplication{

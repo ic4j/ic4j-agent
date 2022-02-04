@@ -47,6 +47,30 @@ public class LoanTest {
 		Agent agent = new AgentBuilder().transport(transport).nonceFactory(new NonceFactory())
 				.build();
 		
+		// Get Loan Offer Request	
+
+		List<IDLValue> args = new ArrayList<IDLValue>();
+
+		IDLArgs idlArgs = IDLArgs.create(args);
+
+		byte[] buf = idlArgs.toBytes();
+
+		CompletableFuture<byte[]> queryResponse = agent.queryRaw(
+				Principal.fromString(TestProperties.LOAN_CANISTER_ID),
+				Principal.fromString(TestProperties.LOAN_CANISTER_ID), "getOffer", buf, Optional.empty());
+
+		try {
+			byte[] queryOutput = queryResponse.get();
+
+			LoanOffer loanResult = IDLArgs.fromBytes(queryOutput).getArgs().get(0).getValue(new PojoDeserializer(), LoanOffer.class);
+			
+			//Assertions.assertArrayEquals(loanRequestArray, loanRequestArrayResult);
+
+		} catch (Throwable ex) {
+			LOG.debug(ex.getLocalizedMessage(), ex);
+			Assertions.fail(ex.getLocalizedMessage());
+		}	
+		
 		// Loan Offer Request	
 		
 		LoanOfferRequest loanRequest = new LoanOfferRequest();
@@ -63,14 +87,14 @@ public class LoanTest {
 
 		IDLValue idlValue = IDLValue.create(loanRequestArray, new PojoSerializer());
 
-		List<IDLValue> args = new ArrayList<IDLValue>();
+		args = new ArrayList<IDLValue>();
 		args.add(idlValue);
 
-		IDLArgs idlArgs = IDLArgs.create(args);
+		idlArgs = IDLArgs.create(args);
 
-		byte[] buf = idlArgs.toBytes();
+		buf = idlArgs.toBytes();
 
-		CompletableFuture<byte[]> queryResponse = agent.queryRaw(
+		queryResponse = agent.queryRaw(
 				Principal.fromString(TestProperties.LOAN_CANISTER_ID),
 				Principal.fromString(TestProperties.LOAN_CANISTER_ID), "echoOfferRequests", buf, Optional.empty());
 
@@ -86,16 +110,38 @@ public class LoanTest {
 			Assertions.fail(ex.getLocalizedMessage());
 		}
 		
+		args = new ArrayList<IDLValue>();
+
+		idlArgs = IDLArgs.create(args);
+
+		buf = idlArgs.toBytes();
+
+		queryResponse = agent.queryRaw(
+				Principal.fromString(TestProperties.LOAN_CANISTER_ID),
+				Principal.fromString(TestProperties.LOAN_CANISTER_ID), "getName", buf, Optional.empty());
+
+		try {
+			byte[] queryOutput = queryResponse.get();
+
+			Optional<String> nameResult = IDLArgs.fromBytes(queryOutput).getArgs().get(0).getValue(new PojoDeserializer(), Optional.class);
+			
+			Assertions.assertEquals("Name", nameResult.get());
+
+		} catch (Throwable ex) {
+			LOG.debug(ex.getLocalizedMessage(), ex);
+			Assertions.fail(ex.getLocalizedMessage());
+		}		
+		
 		// Loan Offer Request		
 		
 		LoanOffer loan = new LoanOffer();
 		
 		loan.userId = Principal.fromString("ubgwl-msd3g-gr5yh-cwpic-elony-lnexo-5f3wf-atisx-hxeyt-ffmfu-tqe");
 		loan.apr = (double) 3.4;
-		loan.applicationId = new BigInteger("11");
+		loan.applicationId = 11;
 		loan.providerName = "United Loan";
-		loan.providerId = Principal.fromString("zrakb-eaaaa-aaaab-qacaq-cai");
-		loan.created = new BigInteger("0");
+		loan.providerId = "zrakb-eaaaa-aaaab-qacaq-cai";
+		loan.created = System.currentTimeMillis();
 		
 		LoanOffer[] loanArray = {loan};
 

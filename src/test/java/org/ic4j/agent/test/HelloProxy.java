@@ -11,10 +11,10 @@ import org.ic4j.agent.annotations.Canister;
 import org.ic4j.agent.annotations.EffectiveCanister;
 import org.ic4j.agent.annotations.Transport;
 import org.ic4j.agent.annotations.Waiter;
+import org.ic4j.agent.annotations.QUERY;
+import org.ic4j.agent.annotations.UPDATE;
 import org.ic4j.candid.annotations.Argument;
 import org.ic4j.candid.annotations.Name;
-import org.ic4j.candid.annotations.QUERY;
-import org.ic4j.candid.annotations.UPDATE;
 import org.ic4j.candid.types.Type;
 
 @Agent(identity = @Identity(type = IdentityType.BASIC, pem_file = "./src/test/resources/Ed25519_identity.pem"), transport = @Transport(url = "http://localhost:8001"))

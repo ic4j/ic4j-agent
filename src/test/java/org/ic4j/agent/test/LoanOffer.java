@@ -1,7 +1,5 @@
 package org.ic4j.agent.test;
 
-
-import java.math.BigInteger;
 import org.ic4j.candid.annotations.Name;
 import org.ic4j.candid.types.Type;
 import org.ic4j.types.Principal;
@@ -10,7 +8,7 @@ import org.ic4j.candid.annotations.Field;
 public class LoanOffer{
     @Field(Type.PRINCIPAL)
     @Name("providerid")
-    public Principal providerId;	
+    public String providerId;	
     @Name("providername")
     public String providerName;    
     @Field(Type.PRINCIPAL)
@@ -18,9 +16,10 @@ public class LoanOffer{
     public Principal userId;
     @Field(Type.NAT)
     @Name("applicationid")
-    public BigInteger applicationId;
-    public Double apr;    
-    public BigInteger created;
+    public Integer applicationId;
+    public Double apr;
+    @Field(Type.INT)
+    public Long created;
     
     // only for testing purposes
 	@Override

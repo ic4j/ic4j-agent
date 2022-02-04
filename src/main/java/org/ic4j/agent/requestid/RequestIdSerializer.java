@@ -16,6 +16,7 @@
 
 package org.ic4j.agent.requestid;
 
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -105,8 +106,7 @@ public final class RequestIdSerializer implements Serializer {
 
 			byte[] value = entry.getValue();
 
-			ByteBuffer keyValue = (ByteBuffer) ByteBuffer.allocate(key.limit() + value.length).put(key).put(value)
-					.rewind();
+			ByteBuffer keyValue = (ByteBuffer)((Buffer) ByteBuffer.allocate(key.limit() + value.length).put(key).put(value).rewind());
 
 			keyValues.add(keyValue);
 		}
