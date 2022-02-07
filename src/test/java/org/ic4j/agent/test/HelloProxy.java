@@ -13,7 +13,7 @@ import org.ic4j.agent.annotations.Transport;
 import org.ic4j.agent.annotations.Waiter;
 import org.ic4j.agent.annotations.QUERY;
 import org.ic4j.agent.annotations.UPDATE;
-import org.ic4j.candid.annotations.Argument;
+import org.ic4j.agent.annotations.Argument;
 import org.ic4j.candid.annotations.Name;
 import org.ic4j.candid.types.Type;
 

@@ -46,7 +46,7 @@ import org.ic4j.agent.identity.BasicIdentity;
 import org.ic4j.agent.identity.Identity;
 import org.ic4j.agent.identity.PemError;
 import org.ic4j.agent.identity.Secp256k1Identity;
-import org.ic4j.candid.annotations.Argument;
+import org.ic4j.agent.annotations.Argument;
 import org.ic4j.candid.annotations.Ignore;
 import org.ic4j.candid.annotations.Name;
 import org.ic4j.candid.parser.IDLArgs;

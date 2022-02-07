@@ -17,6 +17,7 @@
 package org.ic4j.agent.identity;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.InvalidKeyException;
@@ -60,11 +61,11 @@ public final class BasicIdentity implements Identity {
 		this.keyPair = keyPair;
 		this.derEncodedPublickey = derEncodedPublickey;
 	}
-
-	public static BasicIdentity fromPEMFile(Path path) {
+	
+	public static BasicIdentity fromPEMFile(Reader reader) {
 		try {			
 			
-			PEMParser pemParser = new PEMParser(Files.newBufferedReader(path));
+			PEMParser pemParser = new PEMParser(reader);
 
 		    Object pemObject = pemParser.readObject();
 	        
@@ -90,6 +91,15 @@ public final class BasicIdentity implements Identity {
 		    	throw PemError.create(PemError.PemErrorCode.PEM_ERROR);
 			
 		} catch (IOException | NoSuchAlgorithmException | InvalidKeySpecException e) {
+			throw PemError.create(PemError.PemErrorCode.PEM_ERROR, e);
+		}
+	}	
+
+	public static BasicIdentity fromPEMFile(Path path) {
+		try {
+			Reader reader = Files.newBufferedReader(path);
+			return fromPEMFile(reader);
+		} catch (IOException e) {
 			throw PemError.create(PemError.PemErrorCode.PEM_ERROR, e);
 		}
 	}

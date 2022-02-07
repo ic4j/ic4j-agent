@@ -3,9 +3,11 @@ package org.ic4j.agent.test;
 import java.math.BigInteger;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.ic4j.agent.Agent;
 import org.ic4j.agent.AgentBuilder;
@@ -32,7 +34,6 @@ public class LoanTest {
 	ReplicaTransport transport;
 
 	try {
-
 		String transportType = TestProperties.TRANSPORT_TYPE;
 
 		switch (transportType) {
@@ -43,9 +44,12 @@ public class LoanTest {
 			transport = ReplicaApacheHttpTransport.create(TestProperties.LOAN_URL);
 			break;
 		}
+		
+		
 
 		Agent agent = new AgentBuilder().transport(transport).nonceFactory(new NonceFactory())
 				.build();
+				
 		
 		// Get Loan Offer Request	
 
@@ -63,8 +67,14 @@ public class LoanTest {
 			byte[] queryOutput = queryResponse.get();
 
 			LoanOffer loanResult = IDLArgs.fromBytes(queryOutput).getArgs().get(0).getValue(new PojoDeserializer(), LoanOffer.class);
+
+			long millis = TimeUnit.MILLISECONDS.convert(loanResult.created, TimeUnit.NANOSECONDS); 
+
+			Date date = new Date(millis);
 			
-			//Assertions.assertArrayEquals(loanRequestArray, loanRequestArrayResult);
+			Assertions.assertEquals(1, loanResult.applicationId);
+			Assertions.assertEquals(3.14, loanResult.apr);
+			Assertions.assertEquals("Loan Provider", loanResult.providerName);
 
 		} catch (Throwable ex) {
 			LOG.debug(ex.getLocalizedMessage(), ex);
