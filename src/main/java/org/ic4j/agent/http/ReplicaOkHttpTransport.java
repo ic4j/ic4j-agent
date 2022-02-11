@@ -52,13 +52,22 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 	private final MediaType dfinityContentType = MediaType.parse(ReplicaHttpProperties.DFINITY_CONTENT_TYPE);
 
 	ReplicaOkHttpTransport(URI url) {
-		this.uri = url;
+		
+		//check if url ends with /	
+		if('/' == url.toString().charAt(url.toString().length() - 1))
+			this.uri = URI.create(url.toString().substring(0, url.toString().length() - 1));
+		else	
+			this.uri = url;
 
 		client = new OkHttpClient();
 	}
 
 	ReplicaOkHttpTransport(URI url, int timeout) {
-		this.uri = url;
+		//check if url ends with /	
+		if('/' == url.toString().charAt(url.toString().length() - 1))
+			this.uri = URI.create(url.toString().substring(0, url.toString().length() - 1));
+		else	
+			this.uri = url;
 
 		client = new OkHttpClient.Builder().readTimeout(timeout, TimeUnit.SECONDS).build();
 	}
