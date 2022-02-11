@@ -48,7 +48,7 @@ public class ICTest {
 	public void test() {
 		ReplicaTransport transport;
 
-		try {
+		try {		
 			Security.addProvider(new BouncyCastleProvider());
 
 			KeyPair keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
