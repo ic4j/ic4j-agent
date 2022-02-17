@@ -324,26 +324,26 @@ byte[] buf = idlArgs.toBytes();
 
 To add IC4J Agent library to your Java project use Maven or Gradle import from Maven Central.
 
-<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.4/jar">
-https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.4/jar
+<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.5/jar">
+https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.5/jar
 </a>
 
 ```
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-agent</artifactId>
-  <version>0.6.4</version>
+  <version>0.6.5</version>
 </dependency>
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-candid</artifactId>
-  <version>0.6.4</version>
+  <version>0.6.5</version>
 </dependency>
 ```
 
 ```
-implementation 'org.ic4j:ic4j-agent:0.6.4'
-implementation 'org.ic4j:ic4j-candid:0.6.4'
+implementation 'org.ic4j:ic4j-agent:0.6.5'
+implementation 'org.ic4j:ic4j-candid:0.6.5'
 ```
 
 
