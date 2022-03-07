@@ -130,7 +130,6 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 			CompletableFuture<byte[]> response = new CompletableFuture<byte[]>();
 
 			Call call = client.newCall(httpRequest);
-			//		(httpRequest, new FutureCallback<SimpleHttpResponse>()
 			
 			call.enqueue(new Callback()
 			{
@@ -166,8 +165,6 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 			return response;
 
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			LOG.debug(e.getLocalizedMessage());
 			throw AgentError.create(AgentError.AgentErrorCode.URL_PARSE_ERROR, e);
 		}
 

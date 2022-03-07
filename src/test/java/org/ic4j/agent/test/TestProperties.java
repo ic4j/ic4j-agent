@@ -58,6 +58,7 @@ final class TestProperties extends Properties{
 	protected static String CBOR_ECHOFLOAT_QUERY_RESPONSE_FILE = "cbor.echoFloat.query.response";
 	protected static String CBOR_ECHOOPT_QUERY_RESPONSE_FILE = "cbor.echoOption.query.response";
 	protected static String CBOR_ECHOVEC_QUERY_RESPONSE_FILE = "cbor.echoVec.query.response";
+	protected static String CBOR_ECHOBINARY_QUERY_RESPONSE_FILE = "cbor.echoBinary.query.response";
 	protected static String CBOR_ECHORECORD_QUERY_RESPONSE_FILE = "cbor.echoRecord.query.response";
 	protected static String CBOR_ECHOPRINCIPAL_QUERY_RESPONSE_FILE = "cbor.echoPrincipal.query.response";	
 
@@ -65,6 +66,8 @@ final class TestProperties extends Properties{
 	protected static String CBOR_HELLO_QUERY_RESPONSE_FILE = "cbor.hello.query.response";	
 	
 	protected static String CBOR_UPDATE_GREET_RESPONSE_FILE = "cbor.update.greet.response";
+	
+	protected static String BINARY_IMAGE_FILE = "dfinity.png";
 	
 	
 	protected static String ED25519_IDENTITY_FILE = "Ed25519_identity.pem";	

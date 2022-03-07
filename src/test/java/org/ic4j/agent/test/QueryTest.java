@@ -1,7 +1,10 @@
 package org.ic4j.agent.test;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
@@ -20,6 +23,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import javax.imageio.ImageIO;
+
+import org.apache.commons.lang3.ArrayUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.ic4j.agent.Agent;
 import org.ic4j.agent.AgentBuilder;
@@ -269,6 +275,37 @@ public class QueryTest extends MockTest {
 				LOG.debug(ex.getLocalizedMessage(), ex);
 				Assertions.fail(ex.getLocalizedMessage());
 			}
+			
+			// test Binary argument
+			try {
+				args = new ArrayList<IDLValue>();
+
+				byte[] binaryValue = getBinary(TestProperties.BINARY_IMAGE_FILE, "png");
+
+				args.add(IDLValue.create(binaryValue, IDLType.createType(org.ic4j.candid.types.Type.VEC, IDLType.createType(org.ic4j.candid.types.Type.NAT8))));
+
+				idlArgs = IDLArgs.create(args);
+
+				buf = idlArgs.toBytes();
+
+				response = agent.queryRaw(Principal.fromString(TestProperties.CANISTER_ID),
+					Principal.fromString(TestProperties.CANISTER_ID), "echoBinary", buf, Optional.empty());
+
+				byte[] output = response.get();
+
+				IDLArgs outArgs = IDLArgs.fromBytes(output);
+
+				Byte[] binaryResponse = (Byte[]) outArgs.getArgs().get(0).getValue();
+
+				LOG.info(Integer.toString(binaryResponse.length));
+				Assertions.assertTrue(binaryValue.length == binaryResponse.length);
+
+				Assertions.assertArrayEquals(binaryValue, ArrayUtils.toPrimitive(binaryResponse));
+
+			} catch (Throwable ex) {
+				LOG.debug(ex.getLocalizedMessage(), ex);
+				Assertions.fail(ex.getLocalizedMessage());
+			}			
 
 			// test Optional argument
 
@@ -395,6 +432,36 @@ public class QueryTest extends MockTest {
 
 				Assertions.assertEquals(doubleValue, output);
 			});
+			
+			// test Binary argument
+			try {
+				byte[] binaryValue = getBinary(TestProperties.BINARY_IMAGE_FILE, "png");
+				
+				BinaryProxy binary = ProxyBuilder.create(agent, Principal.fromString(TestProperties.CANISTER_ID))
+						.getProxy(BinaryProxy.class);
+
+				byte[] binaryResponse = binary.echoBinaryPrimitive(binaryValue);
+				
+				LOG.info(Integer.toString(binaryResponse.length));
+				Assertions.assertTrue(binaryValue.length == binaryResponse.length);
+
+				Assertions.assertArrayEquals(binaryValue, binaryResponse);
+				
+				Byte[] binaryObjectValue = ArrayUtils.toObject(binaryValue);
+				
+				Byte[] binaryObjectResponse = binary.echoBinaryObject(binaryObjectValue);
+				
+				LOG.info(Integer.toString(binaryObjectResponse.length));
+				Assertions.assertTrue(binaryObjectValue.length == binaryObjectResponse.length);
+
+				Assertions.assertArrayEquals(binaryObjectValue, binaryObjectResponse);				
+				
+			}catch(Exception ex)
+			{
+				LOG.error(ex.getLocalizedMessage(), ex);
+				Assertions.fail(ex.getMessage());				
+			}
+						
 
 		} catch (URISyntaxException e) {
 			LOG.error(e.getLocalizedMessage(), e);
@@ -409,6 +476,18 @@ public class QueryTest extends MockTest {
 			mockServerClient.stop();
 		}
 
+	}
+	
+	static byte[] getBinary(String fileName, String type) throws Exception{
+		InputStream binaryInputStream = QueryTest.class.getClassLoader().getResourceAsStream(fileName);
+
+		BufferedImage bImage = ImageIO.read(binaryInputStream);
+		
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		ImageIO.write(bImage, type , bos );
+		byte [] data = bos.toByteArray();
+		 
+		return data;
 	}
 
 	void runMockServer() throws IOException {
@@ -450,6 +529,9 @@ public class QueryTest extends MockTest {
 						case "echoVec":
 							responseFileName = TestProperties.CBOR_ECHOVEC_QUERY_RESPONSE_FILE;
 							break;
+						case "echoBinary":
+							responseFileName = TestProperties.CBOR_ECHOBINARY_QUERY_RESPONSE_FILE;
+							break;							
 						case "echoRecord":
 							responseFileName = TestProperties.CBOR_ECHORECORD_QUERY_RESPONSE_FILE;
 							break;

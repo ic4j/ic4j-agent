@@ -192,8 +192,6 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 			return response;
 
 		} catch (URISyntaxException e) {
-			// TODO Auto-generated catch block
-			LOG.debug(e.getLocalizedMessage());
 			throw AgentError.create(AgentError.AgentErrorCode.URL_PARSE_ERROR, e);
 		}
 

@@ -19,6 +19,7 @@ package org.ic4j.agent;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.Proxy;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -50,6 +51,7 @@ import org.ic4j.agent.annotations.Argument;
 import org.ic4j.candid.annotations.Ignore;
 import org.ic4j.candid.annotations.Name;
 import org.ic4j.candid.parser.IDLArgs;
+import org.ic4j.candid.parser.IDLType;
 import org.ic4j.candid.parser.IDLValue;
 import org.ic4j.candid.pojo.PojoDeserializer;
 import org.ic4j.candid.pojo.PojoSerializer;
@@ -259,6 +261,8 @@ public final class ProxyBuilder {
 					Name nameAnnotation = method.getAnnotation(Name.class);
 					methodName = nameAnnotation.value();
 				}
+				
+				Parameter[] parameters = method.getParameters();
 
 				ArrayList<IDLValue> candidArgs = new ArrayList<IDLValue>();
 
@@ -284,19 +288,20 @@ public final class ProxyBuilder {
 						if(skip) 
 							continue;
 						
-						//if(IDLType.isDefaultType(Argument.class))
-						//{	
-						//	if (argumentAnnotation != null) {
-						//		Type type = argumentAnnotation.value();
-						//		candidArgs.add(IDLValue.create(arg, type));
-						//	} else
-						//		candidArgs.add(IDLValue.create(arg));
-						//}
-						//else
 						{
 							if (argumentAnnotation != null) {
 								Type type = argumentAnnotation.value();
-								candidArgs.add(IDLValue.create(arg,pojoSerializer, type));
+								
+								IDLType idlType;
+								
+								if(parameters[i].getType().isArray())
+									idlType = IDLType.createType(Type.VEC,IDLType.createType(type));
+								else
+									idlType = IDLType.createType(type);
+								
+								IDLValue idlValue = IDLValue.create(arg,pojoSerializer, idlType);	
+								
+								candidArgs.add(idlValue);
 							} else
 								candidArgs.add(IDLValue.create(arg, pojoSerializer));
 						}							
