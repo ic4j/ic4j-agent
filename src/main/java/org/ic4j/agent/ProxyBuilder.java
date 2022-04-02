@@ -40,6 +40,7 @@ import org.ic4j.agent.annotations.Canister;
 import org.ic4j.agent.annotations.EffectiveCanister;
 import org.ic4j.agent.annotations.Transport;
 import org.ic4j.agent.annotations.QUERY;
+import org.ic4j.agent.annotations.ResponseClass;
 import org.ic4j.agent.annotations.UPDATE;
 import org.ic4j.agent.http.ReplicaApacheHttpTransport;
 import org.ic4j.agent.identity.AnonymousIdentity;
@@ -311,6 +312,7 @@ public final class ProxyBuilder {
 
 				byte[] buf = idlArgs.toBytes();
 
+				PojoDeserializer pojoDeserializer = new PojoDeserializer();
 				switch (methodType) {
 				case QUERY: {
 					QueryBuilder queryBuilder = QueryBuilder.create(agent, this.canisterId, methodName);
@@ -319,8 +321,7 @@ public final class ProxyBuilder {
 					queryBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
 
 					CompletableFuture<byte[]> builderResponse = queryBuilder.arg(buf).call();
-
-					PojoDeserializer pojoDeserializer = new PojoDeserializer();
+				
 					try {
 						if (method.getReturnType().equals(CompletableFuture.class)) {
 							CompletableFuture<?> response = new CompletableFuture();
@@ -363,7 +364,7 @@ public final class ProxyBuilder {
 					updateBuilder.effectiveCanisterId = this.effectiveCanisterId;
 					updateBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
 
-					CompletableFuture<?> response = new CompletableFuture();
+					CompletableFuture<Object> response = new CompletableFuture<Object>();
 
 					Waiter waiter = this.waiter;
 
@@ -387,7 +388,16 @@ public final class ProxyBuilder {
 									response.completeExceptionally(AgentError
 											.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
 								else
-									response.complete(outArgs.getArgs().get(0).getValue());
+								{
+									if(method.isAnnotationPresent(ResponseClass.class))
+									{
+										Class<?> responseClass = method.getAnnotation(ResponseClass.class).value();
+										
+										response.complete(outArgs.getArgs().get(0).getValue(pojoDeserializer,responseClass));
+									}
+									else
+										response.complete(outArgs.getArgs().get(0).getValue());
+								}
 							} else
 								response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,
 										"Missing return value"));

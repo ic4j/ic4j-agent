@@ -47,9 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ReplicaApacheHttpTransport implements ReplicaTransport {
-	static final int TIMEOUT = 5;
-	static final long CONNECTION_TTL = 1L;
-
 	protected static final Logger LOG = LoggerFactory.getLogger(ReplicaApacheHttpTransport.class);
 
 	final IOReactorConfig ioReactorConfig;
@@ -61,7 +58,7 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 	ReplicaApacheHttpTransport(URI url) {
 		this.uri = url;
 
-		ioReactorConfig = IOReactorConfig.custom().setSoTimeout(Timeout.ofSeconds(TIMEOUT)).build();
+		ioReactorConfig = IOReactorConfig.custom().setSoTimeout(Timeout.ofSeconds(ReplicaHttpProperties.TIMEOUT)).build();
 
 		client = HttpAsyncClients.custom().setIOReactorConfig(ioReactorConfig).build();
 	}

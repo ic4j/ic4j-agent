@@ -7,4 +7,8 @@ class ReplicaHttpProperties {
 	static final String QUERY_URL_PART = "canister/%s/query";
 	static final String CALL_URL_PART = "canister/%s/call";
 	static final String READ_STATE_URL_PART = "canister/%s/read_state";
+	static final String CONTENT_TYPE = "Content-Type"; 
+	
+	static final int TIMEOUT = 5;
+	static final long CONNECTION_TTL = 1L;
 }

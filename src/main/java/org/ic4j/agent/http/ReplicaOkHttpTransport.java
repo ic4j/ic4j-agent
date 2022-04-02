@@ -39,9 +39,6 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class ReplicaOkHttpTransport implements ReplicaTransport {
-	static final String CONTENT_TYPE = "Content-Type"; 
-	static final int TIMEOUT = 2;
-	static final long CONNECTION_TTL = 1L;
 
 	protected static final Logger LOG = LoggerFactory.getLogger(ReplicaOkHttpTransport.class);
 
@@ -87,7 +84,7 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 
 	public CompletableFuture<byte[]> status() {
 		
-		Request httpRequest = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + ReplicaHttpProperties.STATUS_URL_PART).get().addHeader(CONTENT_TYPE, ReplicaHttpProperties.DFINITY_CONTENT_TYPE).build();		
+		Request httpRequest = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + ReplicaHttpProperties.STATUS_URL_PART).get().addHeader(ReplicaHttpProperties.CONTENT_TYPE, ReplicaHttpProperties.DFINITY_CONTENT_TYPE).build();		
 
 		return this.execute(httpRequest);
 
