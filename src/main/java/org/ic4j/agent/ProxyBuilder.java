@@ -324,7 +324,7 @@ public final class ProxyBuilder {
 				
 					try {
 						if (method.getReturnType().equals(CompletableFuture.class)) {
-							CompletableFuture<?> response = new CompletableFuture();
+							CompletableFuture<Object> response = new CompletableFuture();
 
 							builderResponse.whenComplete((input, ex) -> {
 								if (ex == null) {
@@ -335,7 +335,16 @@ public final class ProxyBuilder {
 											response.completeExceptionally(AgentError.create(
 													AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
 										else
-											response.complete(outArgs.getArgs().get(0).getValue());
+										{
+											if(method.isAnnotationPresent(ResponseClass.class))
+											{
+												Class<?> responseClass = method.getAnnotation(ResponseClass.class).value();
+												
+												response.complete(outArgs.getArgs().get(0).getValue(pojoDeserializer,responseClass));
+											}
+											else
+												response.complete(outArgs.getArgs().get(0).getValue());
+										}
 									} else
 										response.completeExceptionally(AgentError.create(
 												AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));

@@ -63,12 +63,12 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 		client = HttpAsyncClients.custom().setIOReactorConfig(ioReactorConfig).build();
 	}
 
-	ReplicaApacheHttpTransport(URI url, int maxTotal, int maxPerRoute, long connectionTimeToLive, int timeout) {
+	ReplicaApacheHttpTransport(URI url, int maxTotal, int maxPerRoute, int connectionTimeToLive, int timeout) {
 		this.uri = url;
 
 		PoolingAsyncClientConnectionManager connectionManager = PoolingAsyncClientConnectionManagerBuilder.create()
 				.setPoolConcurrencyPolicy(PoolConcurrencyPolicy.STRICT).setConnPoolPolicy(PoolReusePolicy.LIFO)
-				.setConnectionTimeToLive(TimeValue.ofMinutes(connectionTimeToLive)).setMaxConnTotal(maxTotal)
+				.setConnectionTimeToLive(TimeValue.ofSeconds(connectionTimeToLive)).setMaxConnTotal(maxTotal)
 				.setMaxConnPerRoute(maxPerRoute).build();
 
 		ioReactorConfig = IOReactorConfig.custom().setSoTimeout(Timeout.ofSeconds(timeout)).build();
@@ -90,7 +90,7 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 		return new ReplicaApacheHttpTransport(new URI(url));
 	}
 
-	public static ReplicaTransport create(String url, int maxTotal, int maxPerRoute, long connectionTimeToLive,
+	public static ReplicaTransport create(String url, int maxTotal, int maxPerRoute, int connectionTimeToLive,
 			int timeout) throws URISyntaxException {
 		return new ReplicaApacheHttpTransport(new URI(url), maxTotal, maxPerRoute, connectionTimeToLive, timeout);
 	}

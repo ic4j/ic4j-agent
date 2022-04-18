@@ -19,7 +19,6 @@ package org.ic4j.agent.identity;
 import org.ic4j.types.Principal;
 
 public final class AnonymousIdentity implements Identity {
-
 	
 	@Override
 	public Principal sender() {

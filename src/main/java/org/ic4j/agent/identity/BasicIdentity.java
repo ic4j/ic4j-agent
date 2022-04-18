@@ -81,8 +81,7 @@ public final class BasicIdentity implements Identity {
 						new AlgorithmIdentifier(EdECObjectIdentifiers.id_Ed25519), publicKeyBytes);
 				X509EncodedKeySpec x509KeySpec = new X509EncodedKeySpec(pubKeyInfo.getEncoded());
 
-				PublicKey publicKey = keyFactory.generatePublic(x509KeySpec);
-				
+				PublicKey publicKey = keyFactory.generatePublic(x509KeySpec);			
 		    	
 		    	KeyPair keyPair = new KeyPair(publicKey, privateKey);
 		    	return new BasicIdentity(keyPair, publicKey.getEncoded());
