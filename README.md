@@ -1,5 +1,6 @@
 # dfinity-agent
-IC4J Agent for The Internet Computer is a set of native Java libraries to connect remotely to the Internet Computer applications.
+IC4J Agent for The Internet Computer is a set of native Java libraries to connect remotely to the Internet Computer applications. Full documentation <a href=" https://docs.ic4j.com">
+here</a>
 
 <a href="https://dfinity.org/">
 https://dfinity.org/
@@ -324,26 +325,26 @@ byte[] buf = idlArgs.toBytes();
 
 To add IC4J Agent library to your Java project use Maven or Gradle import from Maven Central.
 
-<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.7/jar">
-https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.7/jar
+<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.11/jar">
+https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.11/jar
 </a>
 
 ```
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-agent</artifactId>
-  <version>0.6.7</version>
+  <version>0.6.11</version>
 </dependency>
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-candid</artifactId>
-  <version>0.6.6</version>
+  <version>0.6.11</version>
 </dependency>
 ```
 
 ```
-implementation 'org.ic4j:ic4j-agent:0.6.7'
-implementation 'org.ic4j:ic4j-candid:0.6.6'
+implementation 'org.ic4j:ic4j-agent:0.6.11'
+implementation 'org.ic4j:ic4j-candid:0.6.11'
 ```
 
 
