@@ -5,6 +5,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -12,6 +13,8 @@ import java.util.concurrent.TimeUnit;
 import org.ic4j.agent.Agent;
 import org.ic4j.agent.AgentBuilder;
 import org.ic4j.agent.AgentError;
+import org.ic4j.agent.Request;
+import org.ic4j.agent.Response;
 import org.ic4j.agent.NonceFactory;
 import org.ic4j.agent.ReplicaTransport;
 import org.ic4j.agent.http.ReplicaApacheHttpTransport;
@@ -79,7 +82,44 @@ public class LoanTest {
 		} catch (Throwable ex) {
 			LOG.debug(ex.getLocalizedMessage(), ex);
 			Assertions.fail(ex.getLocalizedMessage());
-		}	
+		}
+		
+		Request<byte[]> queryAgentRequest = new Request<byte[]>(buf);
+		CompletableFuture<Response<byte[]>> queryAgentResponse = agent.queryRaw(
+				Principal.fromString(TestProperties.LOAN_CANISTER_ID),
+				Principal.fromString(TestProperties.LOAN_CANISTER_ID), "getOffer", queryAgentRequest, Optional.empty());
+
+		try {
+			byte[] queryOutput = queryAgentResponse.get().getPayload();
+
+			LoanOffer loanResult = IDLArgs.fromBytes(queryOutput).getArgs().get(0).getValue(new PojoDeserializer(), LoanOffer.class);
+
+			long millis = TimeUnit.MILLISECONDS.convert(loanResult.created, TimeUnit.NANOSECONDS); 
+
+			Date date = new Date(millis);
+			
+			Assertions.assertEquals(1, loanResult.applicationId);
+			Assertions.assertEquals(3.14, loanResult.apr);
+			Assertions.assertEquals("Loan Provider", loanResult.providerName);
+			
+			Map<String,String> headers = queryAgentResponse.get().getHeaders();
+			
+			for(String name : headers.keySet())
+			{
+				LOG.info("Header " + name + ":" + headers.get(name));
+			}
+			
+			Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
+			Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
+			Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
+			Assertions.assertTrue(headers.containsKey("Content-Type"));
+			
+			Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");			
+
+		} catch (Throwable ex) {
+			LOG.debug(ex.getLocalizedMessage(), ex);
+			Assertions.fail(ex.getLocalizedMessage());
+		}		
 		
 		// Loan Offer Request	
 		

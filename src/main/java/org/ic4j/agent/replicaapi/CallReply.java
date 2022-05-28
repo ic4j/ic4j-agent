@@ -18,7 +18,7 @@ package org.ic4j.agent.replicaapi;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public final class CallReply {
+public final class CallReply extends Response {
 	@JsonProperty("arg")
 	public byte[] arg;
 	

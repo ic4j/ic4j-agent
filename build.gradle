@@ -13,7 +13,7 @@ plugins {
 
 
 group 'org.ic4j'
-version '0.6.11'
+version '0.6.12'
 
 sourceCompatibility = 1.8
 
@@ -52,7 +52,7 @@ test {
 }
 
 dependencies {
-	implementation group: 'org.ic4j', name: 'ic4j-candid', version: '0.6.11'
+	implementation group: 'org.ic4j', name: 'ic4j-candid', version: '0.6.12'
 	
 	// https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
 	implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'

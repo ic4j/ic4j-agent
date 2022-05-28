@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -151,7 +152,7 @@ public final class Agent {
 			if (ex == null) {
 				if (input != null) {
 					try {
-						Status status = objectMapper.readValue(input, Status.class);
+						Status status = objectMapper.readValue(input.payload, Status.class);
 						response.complete(status);
 					} catch (Exception e) {
 						LOG.debug(e.getLocalizedMessage());
@@ -171,6 +172,48 @@ public final class Agent {
 
 		return response;
 	}
+	
+	public CompletableFuture<Response<byte[]>> queryRaw(Principal canisterId, Principal effectiveCanisterId, String method, Request<byte[]> request
+			, Optional<Long> ingressExpiryDatetime) throws AgentError {
+		QueryContent queryContent = new QueryContent();
+
+		queryContent.queryRequest.methodName = method;
+		queryContent.queryRequest.canisterId = canisterId;
+		queryContent.queryRequest.arg = request.getPayload();
+		queryContent.queryRequest.sender = this.identity.sender();
+
+		if (ingressExpiryDatetime.isPresent())
+			queryContent.queryRequest.ingressExpiry = ingressExpiryDatetime.get();
+		else
+			queryContent.queryRequest.ingressExpiry = this.getExpiryDate();
+
+		CompletableFuture<Response<byte[]>> response = new CompletableFuture<Response<byte[]>>();
+
+		this.queryEndpoint(effectiveCanisterId, queryContent, request.getHeaders()).whenComplete((input, ex) -> {
+			if (ex == null) {
+				if (input != null) {
+					if (input.replied.isPresent()) {
+											
+						byte[] out = input.replied.get().arg;
+						
+						Response<byte[]> queryResponse = new Response<byte[]>(out, input.headers);
+						response.complete(queryResponse);
+					} else if (input.rejected.isPresent()) {
+						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.REPLICA_ERROR,
+								input.rejected.get().rejectCode, input.rejected.get().rejectMessage));
+					} else
+						response.completeExceptionally(
+								AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS));
+
+				} else {
+					response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS));
+				}
+			} else {
+				response.completeExceptionally(ex);
+			}
+		});
+		return response;
+	}	
 
 	public CompletableFuture<byte[]> queryRaw(Principal canisterId, Principal effectiveCanisterId, String method,
 			byte[] arg, Optional<Long> ingressExpiryDatetime) throws AgentError {
@@ -188,7 +231,7 @@ public final class Agent {
 
 		CompletableFuture<byte[]> response = new CompletableFuture<byte[]>();
 
-		this.queryEndpoint(effectiveCanisterId, queryContent).whenComplete((input, ex) -> {
+		this.queryEndpoint(effectiveCanisterId, queryContent, null).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
 					if (input.replied.isPresent()) {
@@ -211,7 +254,7 @@ public final class Agent {
 		return response;
 	}
 
-	public CompletableFuture<QueryResponse> queryEndpoint(Principal effectiveCanisterId, QueryContent request)
+	public CompletableFuture<QueryResponse> queryEndpoint(Principal effectiveCanisterId, QueryContent request, Map<String,String> headers)
 			throws AgentError {
 
 		RequestId requestId = RequestId.toRequestId(request);
@@ -240,16 +283,17 @@ public final class Agent {
 
 		CompletableFuture<QueryResponse> response = new CompletableFuture<QueryResponse>();
 
-		transport.query(effectiveCanisterId, bytes).whenComplete((input, ex) -> {
+		transport.query(effectiveCanisterId, bytes, headers).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
 					try {
-						QueryResponse queryResponse = objectMapper.readValue(input, QueryResponse.class);
+						QueryResponse queryResponse = objectMapper.readValue(input.payload, QueryResponse.class);
+						queryResponse.headers = input.headers;
 						response.complete(queryResponse);
 					} catch (Exception e) {
 						LOG.debug(e.getLocalizedMessage(), e);
 						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.MESSAGE_ERROR, e,
-								new String(input, StandardCharsets.UTF_8)));
+								new String(input.payload, StandardCharsets.UTF_8)));
 					}
 
 				} else {
@@ -265,6 +309,48 @@ public final class Agent {
 		return response;
 	}
 
+	
+	/*
+	 * The simplest way to do an update call; sends a byte array and will return a
+	 * RequestId. The RequestId should then be used for request_status (most likely
+	 * in a loop).
+	 */
+
+	public CompletableFuture<Response<RequestId>> updateRaw(Principal canisterId, Principal effectiveCanisterId, String method, 
+			Request<byte[]> request,
+			 Optional<Long> ingressExpiryDatetime) throws AgentError {
+		CallRequestContent callRequestContent = new CallRequestContent();
+
+		callRequestContent.callRequest.methodName = method;
+		callRequestContent.callRequest.canisterId = canisterId;
+		callRequestContent.callRequest.arg = request.getPayload();
+		callRequestContent.callRequest.sender = this.identity.sender();
+
+		if (this.nonceFactory != null)
+			callRequestContent.callRequest.nonce = Optional.of(nonceFactory.generate());
+
+		if (ingressExpiryDatetime.isPresent())
+			callRequestContent.callRequest.ingressExpiry = ingressExpiryDatetime.get();
+		else
+			callRequestContent.callRequest.ingressExpiry = this.getExpiryDate();
+
+		CompletableFuture<Response<RequestId>> response = new CompletableFuture<Response<RequestId>>();
+
+		this.callEndpoint(effectiveCanisterId, callRequestContent, request.getHeaders()).whenComplete((input, ex) -> {
+			if (ex == null) {
+				if (input != null) {
+					Response<RequestId> updateResponse = new Response<RequestId>(input.requestId,input.headers);
+					response.complete(updateResponse);
+				} else {
+					response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS));
+				}
+			} else {
+				response.completeExceptionally(ex);
+			}
+		});
+		return response;
+	}
+	
 	/*
 	 * The simplest way to do an update call; sends a byte array and will return a
 	 * RequestId. The RequestId should then be used for request_status (most likely
@@ -290,10 +376,10 @@ public final class Agent {
 
 		CompletableFuture<RequestId> response = new CompletableFuture<RequestId>();
 
-		this.callEndpoint(effectiveCanisterId, callRequestContent).whenComplete((input, ex) -> {
+		this.callEndpoint(effectiveCanisterId, callRequestContent, null).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
-					response.complete(input);
+					response.complete(input.requestId);
 				} else {
 					response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS));
 				}
@@ -304,7 +390,7 @@ public final class Agent {
 		return response;
 	}
 
-	public CompletableFuture<RequestId> callEndpoint(Principal effectiveCanisterId, CallRequestContent request)
+	public CompletableFuture<UpdateResponse> callEndpoint(Principal effectiveCanisterId, CallRequestContent request, Map<String,String> headers)
 			throws AgentError {
 		RequestId requestId = RequestId.toRequestId(request);
 		byte[] msg = this.constructMessage(requestId);
@@ -329,12 +415,16 @@ public final class Agent {
 			// normally, rethrow exception here - or don't catch it at all.
 		}
 
-		CompletableFuture<RequestId> response = new CompletableFuture<RequestId>();
+		CompletableFuture<UpdateResponse> response = new CompletableFuture<UpdateResponse>();
 
-		transport.call(effectiveCanisterId, bytes, requestId).whenComplete((input, ex) -> {
+		transport.call(effectiveCanisterId, bytes, requestId, headers).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
-					response.complete(requestId);
+					UpdateResponse updateResponse = new UpdateResponse();
+					updateResponse.requestId = requestId;
+					updateResponse.headers = input.headers;
+					
+					response.complete(updateResponse);
 				} else {
 					response.completeExceptionally(
 							AgentError.create(AgentError.AgentErrorCode.TRANSPORT_ERROR, "Payload is empty"));
@@ -348,6 +438,45 @@ public final class Agent {
 		return response;
 	}
 
+	
+	public CompletableFuture<Response<RequestStatusResponse>> requestStatusRaw(RequestId requestId, Principal effectiveCanisterId, Request<Void> request)
+			throws AgentError {
+		List<List<byte[]>> paths = new ArrayList<List<byte[]>>();
+
+		List<byte[]> path = new ArrayList<byte[]>();
+		path.add("request_status".getBytes());
+		path.add(requestId.get());
+
+		paths.add(path);
+
+		CompletableFuture<Response<RequestStatusResponse>> response = new CompletableFuture<Response<RequestStatusResponse>>();
+
+		this.readStateRaw(effectiveCanisterId, paths, request.getHeaders()).whenComplete((input, ex) -> {
+			if (ex == null) {
+				if (input != null) {
+
+					try {
+						RequestStatusResponse requestStatusResponse = ResponseAuthentication.lookupRequestStatus(input.certificate,
+								requestId);
+						
+						Response<RequestStatusResponse> stateResponse = new Response<RequestStatusResponse>(requestStatusResponse, input.headers);
+						
+						response.complete(stateResponse);
+					} catch (AgentError e) {
+						response.completeExceptionally(e);
+					}
+				} else {
+					response.completeExceptionally(
+							AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, input));
+				}
+			} else {
+				response.completeExceptionally(ex);
+			}
+		});
+
+		return response;
+	}
+	
 	public CompletableFuture<RequestStatusResponse> requestStatusRaw(RequestId requestId, Principal effectiveCanisterId)
 			throws AgentError {
 		List<List<byte[]>> paths = new ArrayList<List<byte[]>>();
@@ -360,12 +489,12 @@ public final class Agent {
 
 		CompletableFuture<RequestStatusResponse> response = new CompletableFuture<RequestStatusResponse>();
 
-		this.readStateRaw(effectiveCanisterId, paths).whenComplete((input, ex) -> {
+		this.readStateRaw(effectiveCanisterId, paths, null).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
 
 					try {
-						RequestStatusResponse requestStatusResponse = ResponseAuthentication.lookupRequestStatus(input,
+						RequestStatusResponse requestStatusResponse = ResponseAuthentication.lookupRequestStatus(input.certificate,
 								requestId);
 						response.complete(requestStatusResponse);
 					} catch (AgentError e) {
@@ -383,7 +512,7 @@ public final class Agent {
 		return response;
 	}
 
-	public CompletableFuture<Certificate> readStateRaw(Principal effectiveCanisterId, List<List<byte[]>> paths)
+	public CompletableFuture<CertificateResponse> readStateRaw(Principal effectiveCanisterId, List<List<byte[]>> paths, Map<String,String> headers)
 			throws AgentError {
 		ObjectMapper objectMapper = new ObjectMapper(new CBORFactory());
 		objectMapper.registerModule(new Jdk8Module());
@@ -394,15 +523,20 @@ public final class Agent {
 		readStateContent.readStateRequest.sender = this.identity.sender();
 		readStateContent.readStateRequest.ingressExpiry = this.getExpiryDate();
 
-		CompletableFuture<Certificate> response = new CompletableFuture<Certificate>();
+		CompletableFuture<CertificateResponse> response = new CompletableFuture<CertificateResponse>();
 
-		this.readStateEndpoint(effectiveCanisterId, readStateContent, ReadStateResponse.class)
+		this.readStateEndpoint(effectiveCanisterId, readStateContent, headers, ReadStateResponse.class)
 				.whenComplete((input, ex) -> {
 					if (ex == null) {
 						if (input != null) {
 							try {
-								Certificate cert = objectMapper.readValue(input.certificate, Certificate.class);
-								response.complete(cert);
+								Certificate cert = objectMapper.readValue(input.state.certificate, Certificate.class);
+								
+								CertificateResponse certificateResponse = new CertificateResponse();
+								certificateResponse.certificate = cert;
+								certificateResponse.headers = input.headers;
+								
+								response.complete(certificateResponse);
 							} catch (Exception e) {
 								LOG.debug(e.getLocalizedMessage());
 								response.completeExceptionally(
@@ -420,7 +554,7 @@ public final class Agent {
 		return response;
 	}
 
-	public <T> CompletableFuture<T> readStateEndpoint(Principal effectiveCanisterId, ReadStateContent request,
+	public <T> CompletableFuture<StateResponse<T>> readStateEndpoint(Principal effectiveCanisterId, ReadStateContent request, Map<String,String> headers,
 			Class<T> clazz) throws AgentError {
 
 		RequestId requestId = RequestId.toRequestId(request);
@@ -447,18 +581,23 @@ public final class Agent {
 			// normally, rethrow exception here - or don't catch it at all.
 		}
 
-		CompletableFuture<T> response = new CompletableFuture<T>();
+		CompletableFuture<StateResponse<T>> response = new CompletableFuture<StateResponse<T>>();
 
-		transport.readState(effectiveCanisterId, bytes).whenComplete((input, ex) -> {
+		transport.readState(effectiveCanisterId, bytes, headers).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
 					try {
-						T readStateResponse = objectMapper.readValue(input, clazz);
-						response.complete(readStateResponse);
+						T readStateResponse = objectMapper.readValue(input.payload, clazz);
+						
+						StateResponse<T> stateResponse = new StateResponse<T>();
+						
+						stateResponse.state = readStateResponse;
+						stateResponse.headers = input.headers;
+						response.complete(stateResponse);
 					} catch (IOException e) {
 						LOG.debug(e.getLocalizedMessage(), e);
 						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.MESSAGE_ERROR, e,
-								new String(input, StandardCharsets.UTF_8)));
+								new String(input.payload, StandardCharsets.UTF_8)));
 					}
 
 				} else {
@@ -473,5 +612,20 @@ public final class Agent {
 
 		return response;
 	}
+	
+	public class UpdateResponse{
+		public RequestId requestId;
+		public Map<String,String> headers;
+	}
+	
+	public class StateResponse<T>{
+		public T state;
+		public Map<String,String> headers;
+	}	
+	
+	public class CertificateResponse{
+		public Certificate certificate;
+		public Map<String,String> headers;
+	}	
 
 }

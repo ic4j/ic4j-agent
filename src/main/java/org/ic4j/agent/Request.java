@@ -16,21 +16,40 @@
 
 package org.ic4j.agent;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
-import org.ic4j.agent.requestid.RequestId;
-import org.ic4j.types.Principal;
+public final class Request<T> {
+	Map<String,String> headers;
+	
+	T payload;
+	
+	public Request(T payload, Map<String, String> headers) {
+		this.headers = headers;
+		this.payload = payload;
+	}
+	
+	public Request( T payload) {
+		this.headers = new HashMap<String, String>();
+		this.payload = payload;
+	}	
+
+	/**
+	 * @return the headers
+	 */
+	public Map<String, String> getHeaders() {
+		return headers;
+	}
+
+	/**
+	 * @return the payload
+	 */
+	public T getPayload() {
+		return payload;
+	}
 
 
-public interface ReplicaTransport {
 	
-	public CompletableFuture<ReplicaResponse> status();
-	
-	public CompletableFuture<ReplicaResponse> query(Principal canisterId, byte[] envelope, Map<String,String> headers);
-	
-	public CompletableFuture<ReplicaResponse> call(Principal canisterId, byte[] envelope, RequestId requestId, Map<String,String> headers);
-	
-	public CompletableFuture<ReplicaResponse> readState(Principal canisterId, byte[] envelope, Map<String,String> headers);
+
 
 }

@@ -19,6 +19,7 @@ package org.ic4j.agent;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -99,7 +100,7 @@ public final class UpdateBuilder {
 	}
 	
 	/*
-	 * Make a query call. This will return a byte vector.
+	 * Make a update call. This will return a byte vector.
 	 */
 	 
 	public CompletableFuture<byte[]> callAndWait(Waiter waiter) throws AgentError
@@ -145,7 +146,7 @@ public final class UpdateBuilder {
 	}	
 	
 	/*
-	 * Make a update call. This will return a byte vector.
+	 * Make a update call. This will return a byte RequestId.
 	 */
 	 
 	public CompletableFuture<RequestId> call() throws AgentError
@@ -153,8 +154,90 @@ public final class UpdateBuilder {
 		return agent.updateRaw(this.canisterId, this.effectiveCanisterId, this.methodName, this.arg, this.ingressExpiryDatetime);
 	}
 	
-	
-	
 
+	public CompletableFuture<byte[]> getState(RequestId requestId, Waiter waiter) throws AgentError
+	{
+	
+		CompletableFuture<byte[]> response = new CompletableFuture<byte[]>();
+		
+		do
+		{
+				try {
+					RequestStatusResponse statusResponse = agent.requestStatusRaw(requestId, effectiveCanisterId).get();
+					
+					switch(statusResponse.status)
+					{
+						case REPLIED_STATUS:
+							response.complete(statusResponse.replied.get().arg);
+							return response;
+						case REJECTED_STATUS:
+							response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.REPLICA_ERROR,statusResponse.rejected.get().rejectCode,statusResponse.rejected.get().rejectMessage));
+							return response;
+						case DONE_STATUS:	
+							response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.REQUEST_STATUS_DONE_NO_REPLY,requestId.toHexString()));
+							return response;							
+							
+					}
+				} catch (InterruptedException | ExecutionException e) {
+					LOG.debug(e.getLocalizedMessage(),e);
+				}
+				catch(AgentError e)
+				{
+					LOG.debug(e.getLocalizedMessage(),e);
+				}
+
+		}while(waiter.waitUntil());
+		
+		throw AgentError.create(AgentError.AgentErrorCode.TIMEOUT_WAITING_FOR_RESPONSE);
+	}	
+	
+	/*
+	 * Make a update call. This will return AgentResponse with a requestId and headers.
+	 */
+	 
+	public CompletableFuture<Response<RequestId>> call(Map<String, String> headers) throws AgentError
+	{
+		Request<byte[]> request = new Request<byte[]>(this.arg, headers);
+		return agent.updateRaw(this.canisterId, this.effectiveCanisterId, this.methodName, request, this.ingressExpiryDatetime);
+	}
+	
+	public CompletableFuture<Response<byte[]>> getState(RequestId requestId, Map<String, String> headers, Waiter waiter) throws AgentError
+	{
+	
+		CompletableFuture<Response<byte[]>> response = new CompletableFuture<Response<byte[]>>();
+		
+		do
+		{
+				try {
+					Request<Void> request = new Request<Void>(null, headers);
+					
+					RequestStatusResponse statusResponse = agent.requestStatusRaw(requestId, effectiveCanisterId, request).get().getPayload();
+					
+					switch(statusResponse.status)
+					{
+						case REPLIED_STATUS:
+							Response<byte[]> stateResponse = new Response<byte[]>(statusResponse.replied.get().arg, statusResponse.replied.get().getHeaders());
+							response.complete(stateResponse);
+							return response;
+						case REJECTED_STATUS:
+							response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.REPLICA_ERROR,statusResponse.rejected.get().rejectCode,statusResponse.rejected.get().rejectMessage));
+							return response;
+						case DONE_STATUS:	
+							response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.REQUEST_STATUS_DONE_NO_REPLY,requestId.toHexString()));
+							return response;							
+							
+					}
+				} catch (InterruptedException | ExecutionException e) {
+					LOG.debug(e.getLocalizedMessage(),e);
+				}
+				catch(AgentError e)
+				{
+					LOG.debug(e.getLocalizedMessage(),e);
+				}
+
+		}while(waiter.waitUntil());
+		
+		throw AgentError.create(AgentError.AgentErrorCode.TIMEOUT_WAITING_FOR_RESPONSE);
+	}	
 	
 }

@@ -19,11 +19,15 @@ package org.ic4j.agent.http;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.ic4j.agent.AgentError;
+import org.ic4j.agent.ReplicaResponse;
 import org.ic4j.agent.ReplicaTransport;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.types.Principal;
@@ -32,9 +36,11 @@ import org.slf4j.LoggerFactory;
 
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.Headers;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.Request.Builder;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
@@ -82,7 +88,7 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 		return new ReplicaOkHttpTransport(new URI(url), timeout);
 	}
 
-	public CompletableFuture<byte[]> status() {
+	public CompletableFuture<ReplicaResponse> status() {
 		
 		Request httpRequest = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + ReplicaHttpProperties.STATUS_URL_PART).get().addHeader(ReplicaHttpProperties.CONTENT_TYPE, ReplicaHttpProperties.DFINITY_CONTENT_TYPE).build();		
 
@@ -90,41 +96,81 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 
 	}
 
-	public CompletableFuture<byte[]> query(Principal containerId, byte[] envelope) {
+	public CompletableFuture<ReplicaResponse> query(Principal containerId, byte[] envelope, Map<String,String> headers) {
 		RequestBody requestBody =RequestBody.create(envelope,dfinityContentType);
 			
-		Request httpRequest = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.QUERY_URL_PART, containerId.toString())).post(requestBody).build();		
+		Builder builder = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.QUERY_URL_PART, containerId.toString())).post(requestBody);		
 				
+		if(headers != null)
+		{
+			Iterator<String> names = headers.keySet().iterator();
+			
+			while(names.hasNext())
+			{
+				String name = names.next();
+				builder.addHeader(name, headers.get(name));
+			}			
+		}
+		
+		Request httpRequest =  builder.build();		
+		
 		return this.execute(httpRequest);
 
 	}
 
-	public CompletableFuture<byte[]> call(Principal containerId, byte[] envelope, RequestId requestId) {
+	public CompletableFuture<ReplicaResponse> call(Principal containerId, byte[] envelope, RequestId requestId, Map<String,String> headers) {
 		RequestBody requestBody =RequestBody.create(envelope,dfinityContentType);
 		
-		Request httpRequest = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.CALL_URL_PART, containerId.toString())).post(requestBody).build();		
+		Builder builder  = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.CALL_URL_PART, containerId.toString())).post(requestBody);		
 				
+		
+		if(headers != null)
+		{
+			Iterator<String> names = headers.keySet().iterator();
+			
+			while(names.hasNext())
+			{
+				String name = names.next();
+				builder.addHeader(name, headers.get(name));
+			}			
+		}
+		
+		Request httpRequest =  builder.build();
+		
 		return this.execute(httpRequest);
 
 	}
 
-	public CompletableFuture<byte[]> readState(Principal containerId, byte[] envelope) {
+	public CompletableFuture<ReplicaResponse> readState(Principal containerId, byte[] envelope, Map<String,String> headers) {
 		RequestBody requestBody =RequestBody.create(envelope,dfinityContentType);
 		
-		Request httpRequest = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.READ_STATE_URL_PART, containerId.toString())).post(requestBody).build();		
+		Builder builder = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.READ_STATE_URL_PART, containerId.toString())).post(requestBody);		
 				
+		if(headers != null)
+		{
+			Iterator<String> names = headers.keySet().iterator();
+			
+			while(names.hasNext())
+			{
+				String name = names.next();
+				builder.addHeader(name, headers.get(name));
+			}			
+		}
+		
+		Request httpRequest =  builder.build();
+		
 		return this.execute(httpRequest);
 
 	}
 
-	CompletableFuture<byte[]> execute(Request httpRequest) throws AgentError {
+	CompletableFuture<ReplicaResponse> execute(Request httpRequest) throws AgentError {
 
 		try {
 			URI requestUri = httpRequest.url().uri();
 
 			LOG.debug("Executing request " + httpRequest.method() + " " + requestUri);
 
-			CompletableFuture<byte[]> response = new CompletableFuture<byte[]>();
+			CompletableFuture<ReplicaResponse> response = new CompletableFuture<ReplicaResponse>();
 
 			Call call = client.newCall(httpRequest);
 			
@@ -137,11 +183,27 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 
 					byte[] bytes;
 					try {
+						ReplicaResponse replicaResponse = new ReplicaResponse();
+						
+						replicaResponse.headers = new HashMap<String,String>();
+						
+						Headers headers = httpResponse.headers();
+						
+						Iterator<String> names = headers.names().iterator();
+						
+						while(names.hasNext())
+						{
+							String name = names.next();
+							replicaResponse.headers.put(name, headers.get(name));
+						}
+						
 						bytes = httpResponse.body().bytes();
 						if (bytes == null)
 							bytes = ArrayUtils.EMPTY_BYTE_ARRAY;
+						
+						replicaResponse.payload = bytes;
 
-						response.complete(bytes);						
+						response.complete(replicaResponse);						
 					} catch (IOException e) {
 						response.completeExceptionally(
 								AgentError.create(AgentError.AgentErrorCode.HTTP_ERROR, e, e.getLocalizedMessage()));

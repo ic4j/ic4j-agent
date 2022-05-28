@@ -17,20 +17,8 @@
 package org.ic4j.agent;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
-import org.ic4j.agent.requestid.RequestId;
-import org.ic4j.types.Principal;
-
-
-public interface ReplicaTransport {
-	
-	public CompletableFuture<ReplicaResponse> status();
-	
-	public CompletableFuture<ReplicaResponse> query(Principal canisterId, byte[] envelope, Map<String,String> headers);
-	
-	public CompletableFuture<ReplicaResponse> call(Principal canisterId, byte[] envelope, RequestId requestId, Map<String,String> headers);
-	
-	public CompletableFuture<ReplicaResponse> readState(Principal canisterId, byte[] envelope, Map<String,String> headers);
-
+public final class ReplicaResponse {
+	public byte[] payload;
+	public Map<String,String> headers;
 }

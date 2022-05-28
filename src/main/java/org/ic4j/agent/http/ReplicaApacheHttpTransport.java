@@ -18,6 +18,9 @@ package org.ic4j.agent.http;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -31,6 +34,7 @@ import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBu
 import org.apache.hc.client5.http.nio.AsyncClientConnectionManager;
 import org.apache.hc.core5.concurrent.FutureCallback;
 import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.Method;
@@ -40,6 +44,7 @@ import org.apache.hc.core5.reactor.IOReactorConfig;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
 import org.ic4j.agent.AgentError;
+import org.ic4j.agent.ReplicaResponse;
 import org.ic4j.agent.ReplicaTransport;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.types.Principal;
@@ -100,7 +105,7 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 		return new ReplicaApacheHttpTransport(new URI(url), connectionManager, timeout);
 	}
 
-	public CompletableFuture<byte[]> status() {
+	public CompletableFuture<ReplicaResponse> status() {
 
 		HttpHost target = HttpHost.create(uri);
 		
@@ -110,37 +115,70 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 
 	}
 
-	public CompletableFuture<byte[]> query(Principal containerId, byte[] envelope) {
+	public CompletableFuture<ReplicaResponse> query(Principal containerId, byte[] envelope, Map<String,String> headers) {
 
 		HttpHost target = HttpHost.create(uri);
 		
 		SimpleHttpRequest httpRequest = new SimpleHttpRequest(Method.POST,target,ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.QUERY_URL_PART, containerId.toString()));
 				
+		if(headers != null)
+		{
+			Iterator<String> names = headers.keySet().iterator();
+			
+			while(names.hasNext())
+			{
+				String name = names.next();
+				httpRequest.addHeader(name, headers.get(name));
+			}			
+		}
+		
 		return this.execute(httpRequest, Optional.of(envelope));
 
 	}
 
-	public CompletableFuture<byte[]> call(Principal containerId, byte[] envelope, RequestId requestId) {
+	public CompletableFuture<ReplicaResponse> call(Principal containerId, byte[] envelope, RequestId requestId, Map<String,String> headers) {
 
 		HttpHost target = HttpHost.create(uri);
 		
 		SimpleHttpRequest httpRequest = new SimpleHttpRequest(Method.POST,target,ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.CALL_URL_PART, containerId.toString()));
 
+		if(headers != null)
+		{
+			Iterator<String> names = headers.keySet().iterator();
+			
+			while(names.hasNext())
+			{
+				String name = names.next();
+				httpRequest.addHeader(name, headers.get(name));
+			}			
+		}
+		
 		return this.execute(httpRequest, Optional.of(envelope));
 
 	}
 
-	public CompletableFuture<byte[]> readState(Principal containerId, byte[] envelope) {
+	public CompletableFuture<ReplicaResponse> readState(Principal containerId, byte[] envelope, Map<String,String> headers) {
 
 		HttpHost target = HttpHost.create(uri);
 
 		SimpleHttpRequest httpRequest = new SimpleHttpRequest(Method.POST,target,ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.READ_STATE_URL_PART, containerId.toString()));
 
+		if(headers != null)
+		{
+			Iterator<String> names = headers.keySet().iterator();
+			
+			while(names.hasNext())
+			{
+				String name = names.next();
+				httpRequest.addHeader(name, headers.get(name));
+			}			
+		}
+		
 		return this.execute(httpRequest, Optional.of(envelope));
 
 	}
 
-	CompletableFuture<byte[]> execute(SimpleHttpRequest httpRequest, Optional<byte[]> payload) throws AgentError {
+	CompletableFuture<ReplicaResponse> execute(SimpleHttpRequest httpRequest, Optional<byte[]> payload) throws AgentError {
 
 		try {
 			client.start();
@@ -154,7 +192,8 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 			else
 				httpRequest.setHeader(HttpHeaders.CONTENT_TYPE, ReplicaHttpProperties.DFINITY_CONTENT_TYPE);
 
-			CompletableFuture<byte[]> response = new CompletableFuture<byte[]>();
+
+			CompletableFuture<ReplicaResponse> response = new CompletableFuture<ReplicaResponse>();
 
 			client.execute(httpRequest, new FutureCallback<SimpleHttpResponse>() {
 
@@ -162,12 +201,22 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 				public void completed(SimpleHttpResponse httpResponse) {
 					LOG.debug(requestUri + "->" + httpResponse.getCode());
 
+					ReplicaResponse replicaResponse = new ReplicaResponse();
 					byte[] bytes = httpResponse.getBodyBytes();
+					
+					replicaResponse.headers = new HashMap<String,String>();
+					
+					Header[] headers = httpResponse.getHeaders();
+					
+					for(Header header : headers)
+						replicaResponse.headers.put(header.getName(), header.getValue());			
 
 					if (bytes == null)
 						bytes = ArrayUtils.EMPTY_BYTE_ARRAY;
+					
+					replicaResponse.payload = bytes;
 
-					response.complete(bytes);
+					response.complete(replicaResponse);
 				}
 
 				@Override

@@ -48,6 +48,7 @@ import org.ic4j.agent.identity.BasicIdentity;
 import org.ic4j.agent.identity.Identity;
 import org.ic4j.agent.identity.PemError;
 import org.ic4j.agent.identity.Secp256k1Identity;
+import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.agent.annotations.Argument;
 import org.ic4j.candid.annotations.Ignore;
 import org.ic4j.candid.annotations.Name;
@@ -320,7 +321,7 @@ public final class ProxyBuilder {
 					queryBuilder.effectiveCanisterId = this.effectiveCanisterId;
 					queryBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
 
-					CompletableFuture<byte[]> builderResponse = queryBuilder.arg(buf).call();
+					CompletableFuture<Response<byte[]>> builderResponse = queryBuilder.arg(buf).call(null);
 				
 					try {
 						if (method.getReturnType().equals(CompletableFuture.class)) {
@@ -329,7 +330,7 @@ public final class ProxyBuilder {
 							builderResponse.whenComplete((input, ex) -> {
 								if (ex == null) {
 									if (input != null) {
-										IDLArgs outArgs = IDLArgs.fromBytes(input);
+										IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
 
 										if (outArgs.getArgs().isEmpty())
 											response.completeExceptionally(AgentError.create(
@@ -340,7 +341,12 @@ public final class ProxyBuilder {
 											{
 												Class<?> responseClass = method.getAnnotation(ResponseClass.class).value();
 												
-												response.complete(outArgs.getArgs().get(0).getValue(pojoDeserializer,responseClass));
+												if(responseClass.isAssignableFrom(IDLArgs.class))
+													response.complete(outArgs);
+												else if(responseClass.isAssignableFrom(Response.class))
+													response.complete(input);
+												else
+													response.complete(outArgs.getArgs().get(0).getValue(pojoDeserializer,responseClass));
 											}
 											else
 												response.complete(outArgs.getArgs().get(0).getValue());
@@ -353,9 +359,15 @@ public final class ProxyBuilder {
 							});
 							return response;
 						} else {
-							byte[] output = builderResponse.get();
+							if (method.getReturnType().equals(Response.class))
+								return builderResponse.get();
+							
+							byte[] output = builderResponse.get().getPayload();
 
 							IDLArgs outArgs = IDLArgs.fromBytes(output);
+							
+							if (method.getReturnType().equals(IDLArgs.class))
+								return outArgs;
 
 							if (outArgs.getArgs().isEmpty())
 								throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value");
@@ -386,12 +398,14 @@ public final class ProxyBuilder {
 							waiter = Waiter.create(WAITER_TIMEOUT, WAITER_SLEEP);
 					}
 
-					CompletableFuture<byte[]> builderResponse = updateBuilder.arg(buf).callAndWait(waiter);
+					CompletableFuture<Response<RequestId>> requestResponse = updateBuilder.arg(buf).call(null);
 
+					CompletableFuture<Response<byte[]>> builderResponse = updateBuilder.getState(requestResponse.get().getPayload(), null, waiter);
+					
 					builderResponse.whenComplete((input, ex) -> {
 						if (ex == null) {
 							if (input != null) {
-								IDLArgs outArgs = IDLArgs.fromBytes(input);
+								IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
 
 								if (outArgs.getArgs().isEmpty())
 									response.completeExceptionally(AgentError
@@ -402,7 +416,12 @@ public final class ProxyBuilder {
 									{
 										Class<?> responseClass = method.getAnnotation(ResponseClass.class).value();
 										
-										response.complete(outArgs.getArgs().get(0).getValue(pojoDeserializer,responseClass));
+										if(responseClass.isAssignableFrom(IDLArgs.class))
+											response.complete(outArgs);
+										else if(responseClass.isAssignableFrom(Response.class))
+											response.complete(input);										
+										else										
+											response.complete(outArgs.getArgs().get(0).getValue(pojoDeserializer,responseClass));
 									}
 									else
 										response.complete(outArgs.getArgs().get(0).getValue());

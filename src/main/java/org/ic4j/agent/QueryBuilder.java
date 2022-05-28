@@ -19,6 +19,7 @@ package org.ic4j.agent;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -100,4 +101,15 @@ public final class QueryBuilder {
 	{
 		return agent.queryRaw(this.canisterId, this.effectiveCanisterId, this.methodName, this.arg, this.ingressExpiryDatetime);
 	}
+	
+	/*
+	 * Make a query call. This will return AgentResponse with a byte vector and headers.
+	 */
+	 
+	public CompletableFuture<Response<byte[]>> call(Map<String, String> headers) throws AgentError
+	{
+		Request<byte[]> request = new Request<byte[]>(this.arg, headers);
+		
+		return agent.queryRaw(this.canisterId, this.effectiveCanisterId, this.methodName, request, this.ingressExpiryDatetime);
+	}	
 }

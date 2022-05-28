@@ -18,7 +18,7 @@ package org.ic4j.agent.replicaapi;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public final class ReadStateResponse {
+public final class ReadStateResponse extends Response {
 	@JsonProperty("certificate")
 	public byte[] certificate;
 }
