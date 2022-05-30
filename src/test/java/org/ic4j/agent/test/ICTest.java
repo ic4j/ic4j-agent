@@ -36,6 +36,8 @@ import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.candid.parser.IDLArgs;
 import org.ic4j.candid.parser.IDLType;
 import org.ic4j.candid.parser.IDLValue;
+import org.ic4j.candid.pojo.PojoDeserializer;
+import org.ic4j.candid.pojo.PojoSerializer;
 import org.ic4j.candid.types.Label;
 import org.ic4j.types.Principal;
 import org.junit.jupiter.api.Assertions;
@@ -232,11 +234,6 @@ public class ICTest {
 				
 				Map<String,String> headers = agentUpdateResponse.get().getHeaders();
 				
-				for(String name : headers.keySet())
-				{
-					LOG.info("Header " + name + ":" + headers.get(name));
-				}
-				
 				Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
 				Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
 				Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
@@ -275,9 +272,9 @@ public class ICTest {
 					LOG.info("Header " + name + ":" + headers.get(name));
 				}
 				
-				Assertions.assertTrue(headers.containsKey("x-ic-node-id"));
-				Assertions.assertTrue(headers.containsKey("x-ic-subnet-id"));
-				Assertions.assertTrue(headers.containsKey("x-ic-canister-id"));
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
 				Assertions.assertTrue(headers.containsKey("Content-Type"));
 				
 				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");				
@@ -300,6 +297,32 @@ public class ICTest {
 				outArgs = IDLArgs.fromBytes(output);
 
 				LOG.info(outArgs.getArgs().get(0).getValue().toString());
+				
+				Assertions.assertEquals("Hello, " + stringValue + "!", outArgs.getArgs().get(0).getValue());
+				
+				// test with header
+				updateBuilder = UpdateBuilder
+						.create(agent, Principal.fromString(TestProperties.IC_CANISTER_ID), "greet").arg(buf);
+
+				CompletableFuture<RequestId> builderResponseWithHeader = updateBuilder.call();
+					
+				Response<byte[]> responseWithHeader = updateBuilder.getState(builderResponseWithHeader.get(), null, org.ic4j.agent.Waiter.create(60, 5)).get();		
+
+				output = responseWithHeader.getPayload();
+				outArgs = IDLArgs.fromBytes(output);
+
+				LOG.info(outArgs.getArgs().get(0).getValue().toString());
+				
+				Assertions.assertEquals("Hello, " + stringValue + "!", outArgs.getArgs().get(0).getValue());
+				
+				headers = responseWithHeader.getHeaders();
+				
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey("Content-Type"));
+				
+				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");
 
 				HelloProxy hello = ProxyBuilder.create(agent, Principal.fromString(TestProperties.IC_CANISTER_ID))
 						.getProxy(HelloProxy.class);
@@ -308,6 +331,28 @@ public class ICTest {
 
 				LOG.info(proxyResponse.get());
 				Assertions.assertEquals(proxyResponse.get(), "Hello, " + value + "!");
+				
+				//test with headers
+
+				Response<byte[]> proxyResponseWithHeader = hello.greetWithHeader(value).get();
+				
+				output = proxyResponseWithHeader.getPayload();
+				
+				outArgs = IDLArgs.fromBytes(output);
+
+				LOG.info(outArgs.getArgs().get(0).getValue().toString());
+
+				Assertions.assertEquals(outArgs.getArgs().get(0).getValue().toString(), "Hello, " + value + "!");	
+				
+				headers = proxyResponseWithHeader.getHeaders();
+				
+				
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey("Content-Type"));
+				
+				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");
 
 				BigInteger intValue = new BigInteger("10000");
 
@@ -345,11 +390,40 @@ public class ICTest {
 				
 				complexPojoValue2.pojo = pojoValue;
 				
-				ComplexPojo[] complexPojoArrayValue = {complexPojoValue,complexPojoValue2};
+				ComplexPojo[] complexPojoArrayValue = {complexPojoValue,complexPojoValue2};			
+				
+				idlValue = IDLValue.create(complexPojoArrayValue, new PojoSerializer());
+
+				args = new ArrayList<IDLValue>();
+				args.add(idlValue);
+
+				idlArgs = IDLArgs.create(args);
+
+				buf = idlArgs.toBytes();
 				
 				ComplexPojo[] complexPojoArrayResult = hello.echoComplexPojo( complexPojoArrayValue);
 				
-				Assertions.assertArrayEquals(complexPojoArrayValue, complexPojoArrayValue);
+				Assertions.assertArrayEquals(complexPojoArrayValue, complexPojoArrayResult);
+				
+				proxyResponseWithHeader = hello.echoComplexPojoWithHeader(complexPojoArrayValue);
+				
+				output = proxyResponseWithHeader.getPayload();
+				
+				outArgs = IDLArgs.fromBytes(output);
+				
+				complexPojoArrayResult = outArgs.getArgs().get(0)
+						.getValue(new PojoDeserializer(), ComplexPojo[].class);
+				
+				Assertions.assertArrayEquals(complexPojoArrayValue, complexPojoArrayResult);
+				
+				headers = proxyResponseWithHeader.getHeaders();
+				
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
+				Assertions.assertTrue(headers.containsKey("Content-Type"));
+				
+				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");				
 
 			} catch (Throwable ex) {
 				LOG.error(ex.getLocalizedMessage(), ex);

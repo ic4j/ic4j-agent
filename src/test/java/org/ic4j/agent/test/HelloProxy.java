@@ -4,6 +4,7 @@ import java.math.BigInteger;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import org.ic4j.agent.Response;
 import org.ic4j.agent.annotations.Agent;
 import org.ic4j.agent.annotations.Identity;
 import org.ic4j.agent.annotations.IdentityType;
@@ -12,6 +13,7 @@ import org.ic4j.agent.annotations.EffectiveCanister;
 import org.ic4j.agent.annotations.Transport;
 import org.ic4j.agent.annotations.Waiter;
 import org.ic4j.agent.annotations.QUERY;
+import org.ic4j.agent.annotations.ResponseClass;
 import org.ic4j.agent.annotations.UPDATE;
 import org.ic4j.agent.annotations.Argument;
 import org.ic4j.candid.annotations.Name;
@@ -45,8 +47,12 @@ public interface HelloProxy {
 	public Pojo subComplexPojo(ComplexPojo value);
 	
 	@QUERY
-	@Name("echoPojoVec")
+	@Name("echoComplexPojoVec")
 	public ComplexPojo[] echoComplexPojo(ComplexPojo[] value);	
+	
+	@QUERY
+	@Name("echoComplexPojoVec")
+	public Response<byte[]> echoComplexPojoWithHeader(ComplexPojo[] value);	
 	
 	@QUERY
 	public CompletableFuture<Double> getFloat(Double value);
@@ -55,5 +61,11 @@ public interface HelloProxy {
 	@Name("greet")
 	@Waiter(timeout = 30)
 	public CompletableFuture<String> greet(@Argument(Type.TEXT)String name);
+	
+	@UPDATE
+	@Name("greet")
+	@Waiter(timeout = 30)
+	@ResponseClass(Response.class)
+	public CompletableFuture<Response<byte[]>> greetWithHeader(@Argument(Type.TEXT)String name);	
 
 }

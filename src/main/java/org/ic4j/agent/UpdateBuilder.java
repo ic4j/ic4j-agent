@@ -211,12 +211,13 @@ public final class UpdateBuilder {
 				try {
 					Request<Void> request = new Request<Void>(null, headers);
 					
-					RequestStatusResponse statusResponse = agent.requestStatusRaw(requestId, effectiveCanisterId, request).get().getPayload();
+					Response<RequestStatusResponse> rawResponse = agent.requestStatusRaw(requestId, effectiveCanisterId, request).get();
+					RequestStatusResponse statusResponse = rawResponse.getPayload();
 					
 					switch(statusResponse.status)
 					{
 						case REPLIED_STATUS:
-							Response<byte[]> stateResponse = new Response<byte[]>(statusResponse.replied.get().arg, statusResponse.replied.get().getHeaders());
+							Response<byte[]> stateResponse = new Response<byte[]>(statusResponse.replied.get().arg, rawResponse.getHeaders());
 							response.complete(stateResponse);
 							return response;
 						case REJECTED_STATUS:
