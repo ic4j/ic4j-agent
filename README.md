@@ -1,6 +1,8 @@
 # dfinity-agent
-IC4J Agent for The Internet Computer is a set of native Java libraries to connect remotely to the Internet Computer applications. Full documentation <a href=" https://docs.ic4j.com">
+Complete documentation <a href="https://docs.ic4j.com">
 here</a>
+
+IC4J Agent for The Internet Computer is a set of native Java libraries to connect remotely to the Internet Computer applications. 
 
 <a href="https://dfinity.org/">
 https://dfinity.org/

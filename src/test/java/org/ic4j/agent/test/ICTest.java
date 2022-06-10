@@ -108,6 +108,35 @@ public class ICTest {
 					LOG.debug(ex.getLocalizedMessage(), ex);
 					Assertions.fail(ex.getLocalizedMessage());
 				}
+				
+				args = new ArrayList<IDLValue>();
+
+				Principal principalValue = Principal.fromString("aapvz-eiaaa-aaaaa-aadia-cai");
+
+				args.add(IDLValue.create(principalValue));
+
+
+				idlArgs = IDLArgs.create(args);
+
+				buf = idlArgs.toBytes();
+
+				queryResponse = agent.queryRaw(
+						Principal.fromString(TestProperties.IC_CANISTER_ID),
+						Principal.fromString(TestProperties.IC_CANISTER_ID), "echoPrincipal", buf, Optional.empty());
+
+				try {
+					byte[] queryOutput = queryResponse.get();
+
+					IDLArgs outArgs = IDLArgs.fromBytes(queryOutput);
+					
+					Principal principalResponse = outArgs.getArgs().get(0).getValue();
+
+					LOG.info(principalResponse.toString());
+					Assertions.assertEquals(principalValue, principalResponse);
+				} catch (Throwable ex) {
+					LOG.debug(ex.getLocalizedMessage(), ex);
+					Assertions.fail(ex.getLocalizedMessage());
+				}				
 
 				// Record
 				Map<Label, Object> mapValue = new HashMap<Label, Object>();

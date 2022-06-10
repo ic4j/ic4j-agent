@@ -1,4 +1,5 @@
 import Principal "mo:base/Principal";
+import Debug "mo:base/Debug";
 
 actor {
     stable var name = "Me";
@@ -58,6 +59,7 @@ actor {
     };
 
     public shared query func echoPrincipal( value : Principal) : async Principal {
+    	Debug.print("Principal:" #Principal.toText(value));
         return value;
     };  
 
