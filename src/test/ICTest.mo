@@ -4,6 +4,11 @@ import Debug "mo:base/Debug";
 actor {
     stable var name = "Me";
 
+    type Result = {
+        #Ok : Principal;
+        #Err : Text;
+    };
+
     type Entry = {
         bar : Bool;
         foo : Int;
@@ -66,6 +71,10 @@ actor {
      public shared query func echoRecord( value : Entry) : async Entry {
         return value;
     }; 
+
+     public shared query func echoVariant( value : Result) : async Result {
+        return value;
+    };    
 
      public shared query func echoPojo( value : Entry) : async Entry {
         return value;

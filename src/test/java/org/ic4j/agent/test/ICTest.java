@@ -39,6 +39,7 @@ import org.ic4j.candid.parser.IDLValue;
 import org.ic4j.candid.pojo.PojoDeserializer;
 import org.ic4j.candid.pojo.PojoSerializer;
 import org.ic4j.candid.types.Label;
+import org.ic4j.candid.types.Type;
 import org.ic4j.types.Principal;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -194,14 +195,49 @@ public class ICTest {
 					{
 						LOG.info("Header " + name + ":" + headers.get(name));
 					}
-					
+								
 					Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
 					Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
 					Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
 					Assertions.assertTrue(headers.containsKey("Content-Type"));
 					
-					Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");
+					Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");								
+				} catch (Throwable ex) {
+					LOG.debug(ex.getLocalizedMessage(), ex);
+					Assertions.fail(ex.getLocalizedMessage());
+				}
+				
+				// Variant
+				mapValue = new HashMap<Label, Object>();
+
+				mapValue.put(Label.createNamedLabel("Ok"), principalValue);
+
+				args = new ArrayList<IDLValue>();
+
+				idlValue = IDLValue.create(mapValue, Type.VARIANT);
+
+				args.add(idlValue);
+
+				idlArgs = IDLArgs.create(args);
+
+				buf = idlArgs.toBytes();
+
+				queryResponse = agent.queryRaw(Principal.fromString(TestProperties.IC_CANISTER_ID),
+						Principal.fromString(TestProperties.IC_CANISTER_ID), "echoVariant", buf, Optional.empty());
+
+				try {
+					byte[] queryOutput = queryResponse.get();
+
+					IDLArgs outArgs = IDLArgs.fromBytes(queryOutput);
 					
+					Map<Label, Object> mapResult = outArgs.getArgs().get(0).getValue();
+					
+					if(mapResult.containsKey(Label.createNamedLabel("Ok")))
+					{
+						Principal principalResult = (Principal) mapResult.get(Label.createNamedLabel("Ok"));
+						LOG.info(principalResult.toString());
+						Assertions.assertEquals(principalValue, principalResult);
+					}
 				} catch (Throwable ex) {
 					LOG.debug(ex.getLocalizedMessage(), ex);
 					Assertions.fail(ex.getLocalizedMessage());
