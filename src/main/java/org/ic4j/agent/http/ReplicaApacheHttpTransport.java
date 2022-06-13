@@ -16,6 +16,7 @@
 
 package org.ic4j.agent.http;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashMap;
@@ -241,6 +242,16 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 			throw AgentError.create(AgentError.AgentErrorCode.URL_PARSE_ERROR, e);
 		}
 
+	}
+	
+	public void close()
+	{	
+		if(this.client != null)
+			try {
+				this.client.close();
+			} catch (IOException e) {
+				throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e);
+			}
 	}
 
 }

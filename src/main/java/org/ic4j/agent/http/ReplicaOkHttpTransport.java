@@ -228,5 +228,12 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 		}
 
 	}
+	
+	public void close()
+	{	
+		if(this.client != null) {
+			this.client.connectionPool().evictAll();
+		}
+	}
 
 }

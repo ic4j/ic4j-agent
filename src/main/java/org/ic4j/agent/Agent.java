@@ -613,6 +613,12 @@ public final class Agent {
 		return response;
 	}
 	
+	public void close()
+	{
+		if(this.transport != null)
+			this.transport.close();
+	}
+	
 	public class UpdateResponse{
 		public RequestId requestId;
 		public Map<String,String> headers;

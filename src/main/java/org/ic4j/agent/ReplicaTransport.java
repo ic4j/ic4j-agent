@@ -32,5 +32,7 @@ public interface ReplicaTransport {
 	public CompletableFuture<ReplicaResponse> call(Principal canisterId, byte[] envelope, RequestId requestId, Map<String,String> headers);
 	
 	public CompletableFuture<ReplicaResponse> readState(Principal canisterId, byte[] envelope, Map<String,String> headers);
+	
+	public void close();
 
 }

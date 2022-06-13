@@ -20,17 +20,6 @@ and it's using Dfinity Rust agent as an inspiration, using similar package struc
 https://github.com/dfinity/agent-rs
 </a>
 
-Currently we support query and update (call) operations with primitive types, arrays, option and principal type. Early access to variant and record types. 
-
-0.5.5
-Added early support for Android applications (Java/Kotlin)
-
-0.5.6
-Added support for Java POJO serialization and deserialization
-
-0.5.7
-Added support for JSON(Jackson), XML(DOM) serialization and deserialization and JDBC(ResultSet) serialization
-
 
 # License
 
@@ -59,8 +48,8 @@ IC4J Agent is available under Apache License 2.0.
 | opt   | Optional | 
 | principal   | Principal | 
 | vec   | array | 
-| record   | Map | 
-| variant   | Map | 
+| record   | Map, Class | 
+| variant   | Map, Enum | 
 | null   |Null | 
 
 ## Supported Identities
@@ -327,26 +316,26 @@ byte[] buf = idlArgs.toBytes();
 
 To add IC4J Agent library to your Java project use Maven or Gradle import from Maven Central.
 
-<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.12/jar">
-https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.12/jar
+<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.13/jar">
+https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.13/jar
 </a>
 
 ```
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-agent</artifactId>
-  <version>0.6.12</version>
+  <version>0.6.13</version>
 </dependency>
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-candid</artifactId>
-  <version>0.6.12</version>
+  <version>0.6.13</version>
 </dependency>
 ```
 
 ```
-implementation 'org.ic4j:ic4j-agent:0.6.12'
-implementation 'org.ic4j:ic4j-candid:0.6.12'
+implementation 'org.ic4j:ic4j-agent:0.6.13'
+implementation 'org.ic4j:ic4j-candid:0.6.13'
 ```
 
 
