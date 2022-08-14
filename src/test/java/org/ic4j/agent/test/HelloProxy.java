@@ -42,6 +42,15 @@ public interface HelloProxy {
 	@QUERY
 	public ComplexPojo echoComplexPojo(ComplexPojo value);
 	
+	@UPDATE
+	@Waiter(timeout = 30)
+	public CompletableFuture<ComplexPojo> updateComplexPojo(ComplexPojo value);	
+	
+	@UPDATE
+	@Name("void")
+	@Waiter(timeout = 30)
+	public CompletableFuture<Void> noReturn(String value);	
+	
 	@QUERY
 	@Name("subComplexPojo")
 	public Pojo subComplexPojo(ComplexPojo value);
@@ -65,7 +74,6 @@ public interface HelloProxy {
 	@UPDATE
 	@Name("greet")
 	@Waiter(timeout = 30)
-	@ResponseClass(Response.class)
 	public CompletableFuture<Response<byte[]>> greetWithHeader(@Argument(Type.TEXT)String name);	
 
 }

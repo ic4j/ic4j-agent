@@ -38,6 +38,10 @@ actor {
     public shared query func peek(name : Text, value : Int) : async Text {
         return "Hello, " # name # "!";
     };
+    
+    public shared func void(name : Text)  {
+        Debug.print("Hello, " # name # "!");
+    };     
 
     public shared query func echoText( value : Text) : async Text {
         return value;
@@ -86,7 +90,11 @@ actor {
 
      public shared query func echoComplexPojo( value : ComplexEntry) : async ComplexEntry {
         return value;
-    }; 
+    };
+    
+    public shared func updateComplexPojo( value : ComplexEntry) : async ComplexEntry {
+        return value;
+    };    
 
     public shared query func subComplexPojo( value : ComplexEntry) : async Entry {
         return value.pojo;

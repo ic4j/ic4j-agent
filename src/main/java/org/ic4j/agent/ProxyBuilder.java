@@ -20,6 +20,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -50,6 +51,9 @@ import org.ic4j.agent.identity.PemError;
 import org.ic4j.agent.identity.Secp256k1Identity;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.agent.annotations.Argument;
+import org.ic4j.candid.ObjectDeserializer;
+import org.ic4j.candid.ObjectSerializer;
+import org.ic4j.candid.annotations.Deserializer;
 import org.ic4j.candid.annotations.Ignore;
 import org.ic4j.candid.annotations.Name;
 import org.ic4j.candid.parser.IDLArgs;
@@ -263,13 +267,13 @@ public final class ProxyBuilder {
 					Name nameAnnotation = method.getAnnotation(Name.class);
 					methodName = nameAnnotation.value();
 				}
-				
+
 				Parameter[] parameters = method.getParameters();
 
 				ArrayList<IDLValue> candidArgs = new ArrayList<IDLValue>();
 
-				PojoSerializer pojoSerializer = new PojoSerializer();
 				
+
 				if (args != null)
 					for (int i = 0; i < args.length; i++) {
 						Object arg = args[i];
@@ -277,43 +281,56 @@ public final class ProxyBuilder {
 
 						boolean skip = false;
 						
+						ObjectSerializer objectSerializer = new PojoSerializer();
+
 						for (Annotation annotation : method.getParameterAnnotations()[i]) {
-							if(Ignore.class.isInstance(annotation))
-							{
+							if (Ignore.class.isInstance(annotation)) {
 								skip = true;
 								continue;
 							}
-							if (Argument.class.isInstance(annotation)) 
+							if (Argument.class.isInstance(annotation))
 								argumentAnnotation = (Argument) annotation;
+							if (org.ic4j.candid.annotations.Serializer.class.isInstance(annotation))
+							{
+								Class<ObjectSerializer> serializerClass = (Class<ObjectSerializer>) ((org.ic4j.candid.annotations.Serializer) annotation).value();
+								objectSerializer = serializerClass.getConstructor().newInstance();
+							}
 						}
-						
-						if(skip) 
+
+						if (skip)
 							continue;
-						
+
 						{
 							if (argumentAnnotation != null) {
 								Type type = argumentAnnotation.value();
-								
+
 								IDLType idlType;
-								
-								if(parameters[i].getType().isArray())
-									idlType = IDLType.createType(Type.VEC,IDLType.createType(type));
+
+								if (parameters[i].getType().isArray())
+									idlType = IDLType.createType(Type.VEC, IDLType.createType(type));
 								else
 									idlType = IDLType.createType(type);
-								
-								IDLValue idlValue = IDLValue.create(arg,pojoSerializer, idlType);	
-								
+
+								IDLValue idlValue = IDLValue.create(arg, objectSerializer, idlType);
+
 								candidArgs.add(idlValue);
 							} else
-								candidArgs.add(IDLValue.create(arg, pojoSerializer));
-						}							
+								candidArgs.add(IDLValue.create(arg, objectSerializer));
+						}
 					}
 
 				IDLArgs idlArgs = IDLArgs.create(candidArgs);
 
 				byte[] buf = idlArgs.toBytes();
-
-				PojoDeserializer pojoDeserializer = new PojoDeserializer();
+				
+				ObjectDeserializer objectDeserializer;
+				
+				if (method.isAnnotationPresent(org.ic4j.candid.annotations.Deserializer.class)) {
+					Class<ObjectDeserializer> serializerClass = (Class<ObjectDeserializer>) method.getAnnotation(org.ic4j.candid.annotations.Deserializer.class).value();
+					objectDeserializer = serializerClass.getConstructor().newInstance();					
+				}
+				else
+					objectDeserializer = new PojoDeserializer();
 				switch (methodType) {
 				case QUERY: {
 					QueryBuilder queryBuilder = QueryBuilder.create(agent, this.canisterId, methodName);
@@ -322,7 +339,7 @@ public final class ProxyBuilder {
 					queryBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
 
 					CompletableFuture<Response<byte[]>> builderResponse = queryBuilder.arg(buf).call(null);
-				
+
 					try {
 						if (method.getReturnType().equals(CompletableFuture.class)) {
 							CompletableFuture<Object> response = new CompletableFuture();
@@ -335,20 +352,18 @@ public final class ProxyBuilder {
 										if (outArgs.getArgs().isEmpty())
 											response.completeExceptionally(AgentError.create(
 													AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
-										else
-										{
-											if(method.isAnnotationPresent(ResponseClass.class))
-											{
-												Class<?> responseClass = method.getAnnotation(ResponseClass.class).value();
-												
-												if(responseClass.isAssignableFrom(IDLArgs.class))
+										else {
+											Class<?> responseClass = getMethodClass(method);
+
+											if (responseClass != null) {
+												if (responseClass.isAssignableFrom(IDLArgs.class))
 													response.complete(outArgs);
-												else if(responseClass.isAssignableFrom(Response.class))
+												else if (responseClass.isAssignableFrom(Response.class))
 													response.complete(input);
 												else
-													response.complete(outArgs.getArgs().get(0).getValue(pojoDeserializer,responseClass));
-											}
-											else
+													response.complete(outArgs.getArgs().get(0)
+															.getValue(objectDeserializer, responseClass));
+											} else
 												response.complete(outArgs.getArgs().get(0).getValue());
 										}
 									} else
@@ -361,18 +376,18 @@ public final class ProxyBuilder {
 						} else {
 							if (method.getReturnType().equals(Response.class))
 								return builderResponse.get();
-							
+
 							byte[] output = builderResponse.get().getPayload();
 
 							IDLArgs outArgs = IDLArgs.fromBytes(output);
-							
+
 							if (method.getReturnType().equals(IDLArgs.class))
 								return outArgs;
 
 							if (outArgs.getArgs().isEmpty())
 								throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value");
 
-							return outArgs.getArgs().get(0).getValue(pojoDeserializer,method.getReturnType());
+							return outArgs.getArgs().get(0).getValue(objectDeserializer, method.getReturnType());
 						}
 
 					} catch (Exception e) {
@@ -400,35 +415,61 @@ public final class ProxyBuilder {
 
 					CompletableFuture<Response<RequestId>> requestResponse = updateBuilder.arg(buf).call(null);
 
-					CompletableFuture<Response<byte[]>> builderResponse = updateBuilder.getState(requestResponse.get().getPayload(), null, waiter);
-					
+					CompletableFuture<Response<byte[]>> builderResponse = updateBuilder
+							.getState(requestResponse.get().getPayload(), null, waiter);
+
 					builderResponse.whenComplete((input, ex) -> {
 						if (ex == null) {
 							if (input != null) {
 								IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
 
 								if (outArgs.getArgs().isEmpty())
-									response.completeExceptionally(AgentError
-											.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
-								else
 								{
-									if(method.isAnnotationPresent(ResponseClass.class))
-									{
-										Class<?> responseClass = method.getAnnotation(ResponseClass.class).value();
-										
-										if(responseClass.isAssignableFrom(IDLArgs.class))
-											response.complete(outArgs);
-										else if(responseClass.isAssignableFrom(Response.class))
-											response.complete(input);										
-										else										
-											response.complete(outArgs.getArgs().get(0).getValue(pojoDeserializer,responseClass));
+									if (method.getReturnType().equals(Void.TYPE))
+										response.complete(null);
+									else {
+										Class<?> responseClass = getMethodClass(method);
+
+										if (responseClass != null) {
+											if (responseClass.isAssignableFrom(Void.class))
+												response.complete(null);
+											else
+												response.completeExceptionally(AgentError.create(
+														AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+										} else
+											response.completeExceptionally(AgentError
+													.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
 									}
-									else
+								}
+								else {
+									Class<?> responseClass = getMethodClass(method);
+
+									if (responseClass != null) {
+										if (responseClass.isAssignableFrom(IDLArgs.class))
+											response.complete(outArgs);
+										else if (responseClass.isAssignableFrom(Response.class))
+											response.complete(input);
+										else
+											response.complete(
+													outArgs.getArgs().get(0).getValue(objectDeserializer, responseClass));
+									} else
 										response.complete(outArgs.getArgs().get(0).getValue());
 								}
-							} else
-								response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,
-										"Missing return value"));
+							} else if (method.getReturnType().equals(Void.TYPE))
+								response.complete(null);
+							else {
+								Class<?> responseClass = getMethodClass(method);
+
+								if (responseClass != null) {
+									if (responseClass.isAssignableFrom(Void.class))
+										response.complete(null);
+									else
+										response.completeExceptionally(AgentError.create(
+												AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+								} else
+									response.completeExceptionally(AgentError
+											.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+							}
 						} else
 							response.completeExceptionally(ex);
 					});
@@ -441,6 +482,26 @@ public final class ProxyBuilder {
 				throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Candid method type not defined");
 		}
 
+	}
+
+	static Class<?> getMethodClass(Method method) {
+		Class<?> responseClass = null;
+
+		if (method.isAnnotationPresent(ResponseClass.class))
+			responseClass = method.getAnnotation(ResponseClass.class).value();
+		else {
+			java.lang.reflect.Type type = method.getGenericReturnType();
+			ParameterizedType pType = (ParameterizedType) type;
+
+			if (pType.getActualTypeArguments()[0] instanceof ParameterizedType) {
+				pType = (ParameterizedType) pType.getActualTypeArguments()[0];
+
+				responseClass = (Class<?>) pType.getRawType();
+			} else
+				responseClass = (Class<?>) pType.getActualTypeArguments()[0];
+		}
+
+		return responseClass;
 	}
 
 }

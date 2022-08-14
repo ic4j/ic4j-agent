@@ -26,6 +26,7 @@ import java.lang.annotation.Target;
 @Documented
 @Retention(RUNTIME)
 @Target(METHOD)
+@Deprecated
 public @interface ResponseClass {
 	public Class<?>  value();
 }

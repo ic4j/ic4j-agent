@@ -308,7 +308,7 @@ public class ICTest {
 
 				LOG.debug("Request Id:" + requestId.toHexString());
 
-				TimeUnit.SECONDS.sleep(10);
+				TimeUnit.SECONDS.sleep(20);
 				
 				Request<Void> statusAgentRequest = new Request<Void>(null);
 
@@ -393,6 +393,7 @@ public class ICTest {
 						.getProxy(HelloProxy.class);
 
 				CompletableFuture<String> proxyResponse = hello.greet(value);
+				
 
 				LOG.info(proxyResponse.get());
 				Assertions.assertEquals(proxyResponse.get(), "Hello, " + value + "!");
@@ -422,6 +423,10 @@ public class ICTest {
 				BigInteger intValue = new BigInteger("10000");
 
 				String result = hello.peek(value, intValue);
+				
+				CompletableFuture<Void> noReturn = hello.noReturn("Motoko");
+				
+				noReturn.get();
 
 				LOG.info(result);
 				Assertions.assertEquals("Hello, " + value + "!", result);
@@ -447,6 +452,12 @@ public class ICTest {
 				Assertions.assertEquals(pojoValue,pojoResult);
 				
 				ComplexPojo complexPojoResult = hello.echoComplexPojo(complexPojoValue);	
+				Assertions.assertEquals(complexPojoValue,complexPojoResult);
+				
+				CompletableFuture<ComplexPojo> complexProxyResponse = hello.updateComplexPojo(complexPojoValue);
+				
+				complexPojoResult = complexProxyResponse.get();
+				
 				Assertions.assertEquals(complexPojoValue,complexPojoResult);
 				
 				ComplexPojo complexPojoValue2 = new ComplexPojo();
