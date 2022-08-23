@@ -75,7 +75,7 @@ public class ICTest {
 			default:
 				transport = ReplicaApacheHttpTransport.create(TestProperties.IC_URL);
 				break;
-			}
+			}	
 
 			Agent agent = new AgentBuilder().transport(transport).identity(identity).nonceFactory(new NonceFactory())
 					.build();

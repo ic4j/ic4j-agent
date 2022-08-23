@@ -20,28 +20,38 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.ArrayUtils;
+import org.ic4j.agent.hashtree.Label;
 import org.ic4j.agent.identity.Identity;
 import org.ic4j.agent.identity.Signature;
 import org.ic4j.agent.replicaapi.CallRequestContent;
 import org.ic4j.agent.replicaapi.Certificate;
+import org.ic4j.agent.replicaapi.Delegation;
 import org.ic4j.agent.replicaapi.Envelope;
 import org.ic4j.agent.replicaapi.QueryContent;
 import org.ic4j.agent.replicaapi.QueryResponse;
 import org.ic4j.agent.replicaapi.ReadStateContent;
 import org.ic4j.agent.replicaapi.ReadStateResponse;
 import org.ic4j.agent.requestid.RequestId;
+import org.ic4j.candid.ByteUtils;
 import org.ic4j.types.Principal;
+import org.miracl.core.BLS12381.BLS;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
@@ -50,8 +60,7 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 public final class Agent {
 	static final byte[] IC_REQUEST_DOMAIN_SEPARATOR = "\nic-request".getBytes(StandardCharsets.UTF_8);
 	static final byte[] IC_STATE_ROOT_DOMAIN_SEPARATOR = "\ric-state-root".getBytes(StandardCharsets.UTF_8);
-	static final byte[] IC_ROOT_KEY = "\\x30\\x81\\x82\\x30\\x1d\\x06\\x0d\\x2b\\x06\\x01\\x04\\x01\\x82\\xdc\\x7c\\x05\\x03\\x01\\x02\\x01\\x06\\x0c\\x2b\\x06\\x01\\x04\\x01\\x82\\xdc\\x7c\\x05\\x03\\x02\\x01\\x03\\x61\\x00\\x81\\x4c\\x0e\\x6e\\xc7\\x1f\\xab\\x58\\x3b\\x08\\xbd\\x81\\x37\\x3c\\x25\\x5c\\x3c\\x37\\x1b\\x2e\\x84\\x86\\x3c\\x98\\xa4\\xf1\\xe0\\x8b\\x74\\x23\\x5d\\x14\\xfb\\x5d\\x9c\\x0c\\xd5\\x46\\xd9\\x68\\x5f\\x91\\x3a\\x0c\\x0b\\x2c\\xc5\\x34\\x15\\x83\\xbf\\x4b\\x43\\x92\\xe4\\x67\\xdb\\x96\\xd6\\x5b\\x9b\\xb4\\xcb\\x71\\x71\\x12\\xf8\\x47\\x2e\\x0d\\x5a\\x4d\\x14\\x50\\x5f\\xfd\\x74\\x84\\xb0\\x12\\x91\\x09\\x1c\\x5f\\x87\\xb9\\x88\\x83\\x46\\x3f\\x98\\x09\\x1a\\x0b\\xaa\\xae"
-			.getBytes(StandardCharsets.UTF_8);
+	static final byte[] IC_ROOT_KEY;
 
 	static final Integer DEFAULT_INGRESS_EXPIRY_DURATION = 300;
 	static final Integer DEFAULT_PERMITTED_DRIFT = 60;
@@ -63,8 +72,23 @@ public final class Agent {
 	Identity identity;
 	NonceFactory nonceFactory;
 	Optional<byte[]> rootKey;
+	
+	boolean verify = true;
+	
+	static {
+		try {
+			IC_ROOT_KEY = Hex.decodeHex("308182301d060d2b0601040182dc7c0503010201060c2b0601040182dc7c05030201036100814c0e6ec71fab583b08bd81373c255c3c371b2e84863c98a4f1e08b74235d14fb5d9c0cd546d9685f913a0c0b2cc5341583bf4b4392e467db96d65b9bb4cb717112f8472e0d5a4d14505ffd7484b01291091c5f87b98883463f98091a0baaae");
+		} catch (DecoderException e) {
+			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+		}
+	}
 
 	Agent(AgentBuilder builder) {
+		int verifyResponse = BLS.init();
+		
+		if (verifyResponse!=0)
+			throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_VERIFICATION_FAILED);
+		
 		this.transport = builder.config.transport.get();
 
 		if (builder.config.ingressExpiryDuration.isPresent())
@@ -74,7 +98,15 @@ public final class Agent {
 
 		this.identity = builder.config.identity;
 
-		this.nonceFactory = builder.config.nonceFactory;
+		this.nonceFactory = builder.config.nonceFactory;	
+
+		this.rootKey = Optional.of(IC_ROOT_KEY);
+
+	}
+	
+	public void setVerify(boolean verify)
+	{
+		this.verify = verify;
 	}
 
 	Long getExpiryDate() {
@@ -101,15 +133,18 @@ public final class Agent {
 	public void fetchRootKey() throws AgentError {
 		Status status;
 		try {
+			if(this.getRootKey() != null && !Arrays.equals(this.getRootKey(),IC_ROOT_KEY))
+				return;
+			
 			status = this.status().get();
 
 			if (status.rootKey.isPresent())
 				this.setRootKey(status.rootKey.get());
 			else
-				AgentError.create(AgentError.AgentErrorCode.NO_ROOT_KEY_IN_STATUS, status);
+				throw AgentError.create(AgentError.AgentErrorCode.NO_ROOT_KEY_IN_STATUS, status);
 		} catch (InterruptedException | ExecutionException e) {
 			LOG.error(e.getLocalizedMessage(), e);
-			AgentError.create(AgentError.AgentErrorCode.TRANSPORT_ERROR, e);
+			throw AgentError.create(AgentError.AgentErrorCode.TRANSPORT_ERROR, e);
 		}
 
 	}
@@ -154,7 +189,11 @@ public final class Agent {
 					try {
 						Status status = objectMapper.readValue(input.payload, Status.class);
 						response.complete(status);
-					} catch (Exception e) {
+					}
+					catch ( AgentError e) {
+						response.completeExceptionally(e);
+					}
+					catch (Exception e) {
 						LOG.debug(e.getLocalizedMessage());
 						response.completeExceptionally(
 								AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, e, input));
@@ -290,7 +329,11 @@ public final class Agent {
 						QueryResponse queryResponse = objectMapper.readValue(input.payload, QueryResponse.class);
 						queryResponse.headers = input.headers;
 						response.complete(queryResponse);
-					} catch (Exception e) {
+					}
+					catch ( AgentError e) {
+						response.completeExceptionally(e);
+					}
+					catch (Exception e) {
 						LOG.debug(e.getLocalizedMessage(), e);
 						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.MESSAGE_ERROR, e,
 								new String(input.payload, StandardCharsets.UTF_8)));
@@ -438,8 +481,12 @@ public final class Agent {
 		return response;
 	}
 
-	
 	public CompletableFuture<Response<RequestStatusResponse>> requestStatusRaw(RequestId requestId, Principal effectiveCanisterId, Request<Void> request)
+			throws AgentError {
+		return this.requestStatusRaw(requestId, effectiveCanisterId, false, request);
+	}
+	
+	public CompletableFuture<Response<RequestStatusResponse>> requestStatusRaw(RequestId requestId, Principal effectiveCanisterId, boolean disableRangeCheck, Request<Void> request)
 			throws AgentError {
 		List<List<byte[]>> paths = new ArrayList<List<byte[]>>();
 
@@ -451,7 +498,7 @@ public final class Agent {
 
 		CompletableFuture<Response<RequestStatusResponse>> response = new CompletableFuture<Response<RequestStatusResponse>>();
 
-		this.readStateRaw(effectiveCanisterId, paths, request.getHeaders()).whenComplete((input, ex) -> {
+		this.readStateRaw(effectiveCanisterId, paths,disableRangeCheck, request.getHeaders()).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
 
@@ -465,12 +512,45 @@ public final class Agent {
 					} catch (AgentError e) {
 						response.completeExceptionally(e);
 					}
+					catch (Exception e) {						
+						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e));
+					}
 				} else {
 					response.completeExceptionally(
 							AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, input));
 				}
 			} else {
-				response.completeExceptionally(ex);
+				if(ex instanceof AgentError)
+				{			
+					AgentError e = (AgentError) ex;
+					if((e.code == AgentError.AgentErrorCode.CERTIFICATE_VERIFICATION_FAILED || e.code == AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED) && e.getResponse() != null)
+					{
+						if(e.getResponse() instanceof CertificateResponse)
+						{
+							CertificateResponse certificateResponse = (CertificateResponse) e.getResponse();
+
+							try {
+								RequestStatusResponse requestStatusResponse = ResponseAuthentication.lookupRequestStatus(certificateResponse.certificate,
+										requestId);
+								
+								Response<RequestStatusResponse> stateResponse = new Response<RequestStatusResponse>(requestStatusResponse, certificateResponse.headers);
+								
+								e.setResponse(stateResponse);
+							}
+							 catch (AgentError e1) {
+								e1.initCause(e);
+								response.completeExceptionally(e1);
+							}
+							catch (Exception e1) {	
+								e1.initCause(e);
+								response.completeExceptionally(e1);
+							}						
+						}
+					}
+					response.completeExceptionally(e);
+				}
+				else
+					response.completeExceptionally(ex);
 			}
 		});
 
@@ -478,6 +558,11 @@ public final class Agent {
 	}
 	
 	public CompletableFuture<RequestStatusResponse> requestStatusRaw(RequestId requestId, Principal effectiveCanisterId)
+			throws AgentError {
+		return this.requestStatusRaw(requestId, effectiveCanisterId, false);
+	}
+	
+	public CompletableFuture<RequestStatusResponse> requestStatusRaw(RequestId requestId, Principal effectiveCanisterId, boolean disableRangeCheck)
 			throws AgentError {
 		List<List<byte[]>> paths = new ArrayList<List<byte[]>>();
 
@@ -489,7 +574,7 @@ public final class Agent {
 
 		CompletableFuture<RequestStatusResponse> response = new CompletableFuture<RequestStatusResponse>();
 
-		this.readStateRaw(effectiveCanisterId, paths, null).whenComplete((input, ex) -> {
+		this.readStateRaw(effectiveCanisterId, paths,disableRangeCheck, null).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
 
@@ -497,22 +582,61 @@ public final class Agent {
 						RequestStatusResponse requestStatusResponse = ResponseAuthentication.lookupRequestStatus(input.certificate,
 								requestId);
 						response.complete(requestStatusResponse);
-					} catch (AgentError e) {
+					} catch (AgentError e) {						
 						response.completeExceptionally(e);
 					}
+					catch (Exception e) {						
+						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e));
+					}					
 				} else {
 					response.completeExceptionally(
 							AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, input));
 				}
 			} else {
-				response.completeExceptionally(ex);
+				if(ex instanceof AgentError)
+				{			
+					AgentError e = (AgentError) ex;
+					if((e.code == AgentError.AgentErrorCode.CERTIFICATE_VERIFICATION_FAILED || e.code == AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED) && e.getResponse() != null)
+					{
+						if(e.getResponse() instanceof CertificateResponse)
+						{
+							CertificateResponse certificateResponse = (CertificateResponse) e.getResponse();
+							try {
+								RequestStatusResponse requestStatusResponse = ResponseAuthentication.lookupRequestStatus(certificateResponse.certificate,
+										requestId);
+								
+								Response<RequestStatusResponse> stateResponse = new Response<RequestStatusResponse>(requestStatusResponse, certificateResponse.headers);
+								
+								e.setResponse(stateResponse);
+							}
+							 catch (AgentError e1) {
+								e.initCause(e1);
+								response.completeExceptionally(e);
+							}
+							catch (Exception e1) {	
+								e.initCause(e1);
+								response.completeExceptionally(e);
+							}
+						}
+					}
+					response.completeExceptionally(e);
+				}
+				else
+					response.completeExceptionally(ex);
 			}
 		});
 
 		return response;
 	}
-
+	
 	public CompletableFuture<CertificateResponse> readStateRaw(Principal effectiveCanisterId, List<List<byte[]>> paths, Map<String,String> headers)
+			throws AgentError {
+		
+		return this.readStateRaw(effectiveCanisterId, paths, false, headers);
+		
+	}
+
+	public CompletableFuture<CertificateResponse> readStateRaw(Principal effectiveCanisterId, List<List<byte[]>> paths, boolean disableRangeCheck,  Map<String,String> headers)
 			throws AgentError {
 		ObjectMapper objectMapper = new ObjectMapper(new CBORFactory());
 		objectMapper.registerModule(new Jdk8Module());
@@ -531,17 +655,35 @@ public final class Agent {
 						if (input != null) {
 							try {
 								Certificate cert = objectMapper.readValue(input.state.certificate, Certificate.class);
-								
+													
 								CertificateResponse certificateResponse = new CertificateResponse();
 								certificateResponse.certificate = cert;
-								certificateResponse.headers = input.headers;
+								certificateResponse.headers = input.headers;	
 								
-								response.complete(certificateResponse);
-							} catch (Exception e) {
+								try {
+									if(this.verify)
+										this.verify(cert,effectiveCanisterId,disableRangeCheck );
+									
+									response.complete(certificateResponse);									
+								}catch ( AgentError e) {
+									if(e.code == AgentError.AgentErrorCode.CERTIFICATE_VERIFICATION_FAILED || e.code == AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED)
+										e.setResponse(certificateResponse);
+									response.completeExceptionally(e);
+								}
+								
+							}catch ( AgentError e) {
+								response.completeExceptionally(e);
+							}
+							catch (IOException  e) {
 								LOG.debug(e.getLocalizedMessage());
 								response.completeExceptionally(
 										AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, e, input));
 							}
+							catch (Exception  e) {
+								LOG.debug(e.getLocalizedMessage());
+								response.completeExceptionally(
+										AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e));
+							}							
 
 						} else {
 							response.completeExceptionally(
@@ -553,6 +695,101 @@ public final class Agent {
 				});
 		return response;
 	}
+
+	public void verify(Certificate certificate, Principal effectiveCanisterId, boolean disableRangeCheck) throws AgentError {
+		
+		byte[] sig = certificate.signature;
+		
+		byte[] rootHash = certificate.tree.digest();
+		
+		byte[] msg = ArrayUtils.addAll(IC_STATE_ROOT_DOMAIN_SEPARATOR, rootHash);
+		
+		byte[] derKey = this.checkDelegation(certificate.delegation,effectiveCanisterId,disableRangeCheck);
+		
+		byte[] key = ResponseAuthentication.extractDer(derKey);		
+		
+		int verifyResponse = BLS.core_verify(sig,msg,key);
+		
+		if (verifyResponse==0)
+			return;
+		else
+			throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_VERIFICATION_FAILED);
+		
+	}
+
+	private byte[] checkDelegation(Optional<Delegation> delegation, Principal effectiveCanisterId, boolean disableRangeCheck) {
+		if(delegation != null && delegation.isPresent())
+		{
+			ObjectMapper objectMapper = new ObjectMapper(new CBORFactory());
+			objectMapper.registerModule(new Jdk8Module());
+			
+			Certificate certificate;
+			try {
+				certificate = objectMapper.readValue(delegation.get().certificate, Certificate.class);					
+			} catch (Exception e) {
+				throw AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, e, delegation.get().certificate); 
+			}
+			
+			this.verify(certificate, effectiveCanisterId, disableRangeCheck);
+			
+			List<Label> path = new ArrayList<Label>();
+			path.add(new Label("subnet"));			
+			path.add(new Label(delegation.get().subnetId));
+			path.add(new Label("canister_ranges"));
+			
+			byte[] canisterRange = ResponseAuthentication.lookupValue(certificate,path);
+			
+			try {	
+				
+				TypeReference<HashMap<Principal, Principal>> typeRef 
+				  = new TypeReference<HashMap<Principal, Principal>>() {};
+				
+				List<PrincipalRange> ranges =  new ArrayList <> ();
+				
+				List<List<byte[]>> rangesJson = new ArrayList <> ();
+						
+				rangesJson = objectMapper.readValue(canisterRange, List.class);
+				
+				for (Iterator <List<byte[]>> iterator = rangesJson.iterator(); iterator.hasNext();) {
+					List<byte[]> rangeJson = (List<byte[]>) iterator.next();
+					
+					PrincipalRange range = new PrincipalRange();
+					
+					range.low = Principal.from(rangeJson.get(0));
+					range.high = Principal.from(rangeJson.get(1));
+					ranges.add(range);
+			    }
+				
+				if(!disableRangeCheck && ! this.principalIsWithinRanges(effectiveCanisterId, ranges))
+					throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED); 
+						
+			} catch (Exception e) {
+				throw AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, e, canisterRange.toString()); 
+			}
+			
+			path = new ArrayList<Label>();
+			path.add(new Label("subnet"));			
+			path.add(new Label(delegation.get().subnetId));
+			path.add(new Label("public_key"));
+			
+			return ResponseAuthentication.lookupValue(certificate,path);			
+		}
+		else	
+			return this.getRootKey();
+	}
+	
+	boolean principalIsWithinRanges(Principal principal, List<PrincipalRange> ranges)
+	{	
+		for (Iterator<PrincipalRange> iterator = ranges.iterator(); iterator.hasNext();) {
+			PrincipalRange range = iterator.next();	
+
+			if(ByteUtils.compareByteArrays(principal.getValue(), range.low.getValue()) >= 0 && ByteUtils.compareByteArrays(principal.getValue(), range.high.getValue()) <= 0)
+				return true;
+		}
+		
+		return false;		
+	}
+	
 
 	public <T> CompletableFuture<StateResponse<T>> readStateEndpoint(Principal effectiveCanisterId, ReadStateContent request, Map<String,String> headers,
 			Class<T> clazz) throws AgentError {
@@ -594,7 +831,7 @@ public final class Agent {
 						stateResponse.state = readStateResponse;
 						stateResponse.headers = input.headers;
 						response.complete(stateResponse);
-					} catch (IOException e) {
+					} catch (Exception e) {
 						LOG.debug(e.getLocalizedMessage(), e);
 						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.MESSAGE_ERROR, e,
 								new String(input.payload, StandardCharsets.UTF_8)));
@@ -612,6 +849,8 @@ public final class Agent {
 
 		return response;
 	}
+	
+	
 	
 	public void close()
 	{
@@ -632,6 +871,11 @@ public final class Agent {
 	public class CertificateResponse{
 		public Certificate certificate;
 		public Map<String,String> headers;
-	}	
+	}
+	
+	class PrincipalRange{
+		Principal low;
+		Principal high;
+	}
 
 }

@@ -29,7 +29,8 @@ public final class AgentError extends Error {
 	static ResourceBundle properties;
 	
 	AgentErrorCode code;
-
+	
+	Object response;
 
 	static {
 		properties = ResourceBundle.getBundle(RESOURCE_BUNDLE_FILE);
@@ -55,16 +56,32 @@ public final class AgentError extends Error {
 
 	private AgentError(AgentErrorCode code, String message) {
 		super(message);
+		this.code = code;
 	}
 	
 	private AgentError(AgentErrorCode code, Throwable t, String message) {
 		super(message, t);
+		this.code = code;
 	}
 	
 	public AgentErrorCode getCode() {
 		return code;
 	}
 	
+	/**
+	 * @return the response
+	 */
+	public Object getResponse() {
+		return response;
+	}
+
+	/**
+	 * @param response the response to set
+	 */
+	public void setResponse(Object response) {
+		this.response = response;
+	}
+
 	public enum AgentErrorCode {
 		INVALID_REPLICA_URL("InvalidReplicaUrl"),
 		TIMEOUT_WAITING_FOR_RESPONSE("TimeoutWaitingForResponse"),
@@ -87,6 +104,9 @@ public final class AgentError extends Error {
 		LOOKUP_PATH_ERROR("LookupPathError"),
 		INVALID_REQUEST_STATUS("InvalidRequestStatus"),
 		CERTIFICATE_VERIFICATION_FAILED("CertificateVerificationFailed"),
+		CERTIFICATE_NOT_AUTHORIZED("CertificateNotAuthorized"),
+		DER_KEY_LENGTH_MISMATCH("DerKeyLengthMismatch"),
+		DER_PREFIX_MISMATCH("DerKeyLengthMismatch"),
 		NO_ROOT_KEY_IN_STATUS("NoRootKeyInStatus"),
 		COULD_NOT_READ_ROOT_KEY("CouldNotReadRootKey"),
 		MISSING_REPLICA_TRANSPORT("MissingReplicaTransport"),

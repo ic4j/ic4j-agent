@@ -14,18 +14,29 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.annotations;
+package org.ic4j.agent.replicaapi;
 
-import static java.lang.annotation.ElementType.METHOD;
-import static java.lang.annotation.RetentionPolicy.RUNTIME;
+import java.io.IOException;
 
-import java.lang.annotation.Documented;
-import java.lang.annotation.Retention;
-import java.lang.annotation.Target;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.databind.JsonNode;
 
-@Documented
-@Retention(RUNTIME)
-@Target(METHOD)
-public @interface UPDATE {
-	boolean disableRangeCheck() default false;
+public final class Delegation {
+		
+	public byte[] subnetId;
+	
+	@JsonProperty("certificate")
+	public byte[] certificate;
+	
+	@JsonSetter("subnet_id")
+    void setSubnetId(JsonNode subnetIdNode) {
+		if (subnetIdNode != null && subnetIdNode.isBinary()) {
+			try {
+				this.subnetId = subnetIdNode.binaryValue();
+			} catch (IOException e) {
+
+			}
+		}
+	}
 }

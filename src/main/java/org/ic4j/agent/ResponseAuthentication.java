@@ -18,8 +18,12 @@ package org.ic4j.agent;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.lang3.ArrayUtils;
 import org.ic4j.agent.hashtree.Label;
 import org.ic4j.agent.hashtree.LookupResult;
 import org.ic4j.agent.replicaapi.CallReply;
@@ -28,6 +32,31 @@ import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.candid.Leb128;
 
 public final class ResponseAuthentication {
+	static final byte[] DER_PREFIX;
+	static final int KEY_LENGTH = 96;
+	
+	static {
+		try {
+			DER_PREFIX = Hex.decodeHex("308182301d060d2b0601040182dc7c0503010201060c2b0601040182dc7c05030201036100");
+		} catch (DecoderException e) {
+			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+		}
+	}
+	
+	static byte[] extractDer(byte[] buf) throws AgentError
+	{
+		int expectedLength = DER_PREFIX.length + KEY_LENGTH;
+		
+		if(buf.length != expectedLength)
+			throw AgentError.create(AgentError.AgentErrorCode.DER_KEY_LENGTH_MISMATCH,expectedLength,buf.length);
+		
+		byte[] prefix = ArrayUtils.subarray(buf, 0 , DER_PREFIX.length);
+		
+		if(!Arrays.equals(DER_PREFIX, prefix))
+			throw AgentError.create(AgentError.AgentErrorCode.DER_PREFIX_MISMATCH,expectedLength,buf.length);
+		
+		return ArrayUtils.subarray(buf, DER_PREFIX.length , buf.length);
+	}
 	
 	static RequestStatusResponse lookupRequestStatus(Certificate certificate, RequestId requestId) throws AgentError
 	{

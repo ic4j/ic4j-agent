@@ -20,6 +20,7 @@ import java.util.Optional;
 
 import org.ic4j.agent.hashtree.HashTree;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -33,6 +34,6 @@ public final class Certificate {
 	
 	@JsonProperty("delegation")
 	@JsonInclude(JsonInclude.Include.NON_ABSENT)
-	public Optional delegation;
+	public Optional<Delegation> delegation;
 	
 }

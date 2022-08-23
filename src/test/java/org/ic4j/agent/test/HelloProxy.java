@@ -13,7 +13,6 @@ import org.ic4j.agent.annotations.EffectiveCanister;
 import org.ic4j.agent.annotations.Transport;
 import org.ic4j.agent.annotations.Waiter;
 import org.ic4j.agent.annotations.QUERY;
-import org.ic4j.agent.annotations.ResponseClass;
 import org.ic4j.agent.annotations.UPDATE;
 import org.ic4j.agent.annotations.Argument;
 import org.ic4j.candid.annotations.Name;

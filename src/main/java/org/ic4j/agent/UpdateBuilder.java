@@ -25,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.lang3.ArrayUtils;
+import org.ic4j.agent.Agent.CertificateResponse;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.types.Principal;
 import org.slf4j.Logger;
@@ -153,9 +154,13 @@ public final class UpdateBuilder {
 	{
 		return agent.updateRaw(this.canisterId, this.effectiveCanisterId, this.methodName, this.arg, this.ingressExpiryDatetime);
 	}
-	
 
 	public CompletableFuture<byte[]> getState(RequestId requestId, Waiter waiter) throws AgentError
+	{
+		return this.getState(requestId, waiter, false);
+	}	
+
+	public CompletableFuture<byte[]> getState(RequestId requestId, Waiter waiter, boolean disableRangeCheck) throws AgentError
 	{
 	
 		CompletableFuture<byte[]> response = new CompletableFuture<byte[]>();
@@ -163,7 +168,7 @@ public final class UpdateBuilder {
 		do
 		{
 				try {
-					RequestStatusResponse statusResponse = agent.requestStatusRaw(requestId, effectiveCanisterId).get();
+					RequestStatusResponse statusResponse = agent.requestStatusRaw(requestId, effectiveCanisterId, disableRangeCheck).get();
 					
 					switch(statusResponse.status)
 					{
@@ -178,13 +183,23 @@ public final class UpdateBuilder {
 							return response;							
 							
 					}
-				} catch (InterruptedException | ExecutionException e) {
-					LOG.debug(e.getLocalizedMessage(),e);
 				}
 				catch(AgentError e)
 				{
 					LOG.debug(e.getLocalizedMessage(),e);
+					throw e;
 				}
+				catch (ExecutionException e) {
+					LOG.debug(e.getLocalizedMessage(),e);
+					if(e.getCause() != null && e.getCause().getClass().isAssignableFrom(AgentError.class))
+					{
+						response.completeExceptionally(e.getCause());
+						return response;
+					}
+				}				
+				catch (InterruptedException  e) {
+					LOG.debug(e.getLocalizedMessage(),e);
+				}				
 
 		}while(waiter.waitUntil());
 		
@@ -202,6 +217,11 @@ public final class UpdateBuilder {
 	}
 	
 	public CompletableFuture<Response<byte[]>> getState(RequestId requestId, Map<String, String> headers, Waiter waiter) throws AgentError
+	{
+		return this.getState(requestId, headers,false, waiter);
+	}
+	
+	public CompletableFuture<Response<byte[]>> getState(RequestId requestId, Map<String, String> headers, boolean disableRangeCheck, Waiter waiter) throws AgentError
 	{
 	
 		CompletableFuture<Response<byte[]>> response = new CompletableFuture<Response<byte[]>>();
@@ -228,17 +248,59 @@ public final class UpdateBuilder {
 							return response;							
 							
 					}
-				} catch (InterruptedException | ExecutionException e) {
-					LOG.debug(e.getLocalizedMessage(),e);
 				}
 				catch(AgentError e)
 				{
 					LOG.debug(e.getLocalizedMessage(),e);
+
+					response.completeExceptionally(e);
+					return response;
 				}
+				catch (ExecutionException ex) {
+					LOG.debug(ex.getLocalizedMessage(),ex);
+					if(ex.getCause() != null && ex.getCause().getClass().isAssignableFrom(AgentError.class))
+					{
+						AgentError e = (AgentError) ex.getCause();
+						if((e.code == AgentError.AgentErrorCode.CERTIFICATE_VERIFICATION_FAILED || e.code == AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED) && e.getResponse() != null)
+						{
+							
+							if(e.getResponse() instanceof Response<?>)
+							{
+								Response<RequestStatusResponse> rawResponse = (Response<RequestStatusResponse>) e.getResponse();
+								RequestStatusResponse statusResponse = rawResponse.getPayload();
+								switch(statusResponse.status)
+								{
+									case REPLIED_STATUS:
+										Response<byte[]> stateResponse = new Response<byte[]>(statusResponse.replied.get().arg, rawResponse.getHeaders());
+										e.setResponse(stateResponse);
+										break;
+									case REJECTED_STATUS:
+										e.initCause(AgentError.create(AgentError.AgentErrorCode.REPLICA_ERROR,statusResponse.rejected.get().rejectCode,statusResponse.rejected.get().rejectMessage));
+										e.setResponse(null);
+										break;
+									case DONE_STATUS:	
+										e.initCause(AgentError.create(AgentError.AgentErrorCode.REQUEST_STATUS_DONE_NO_REPLY,requestId.toHexString()));
+										e.setResponse(null);	
+										break;
+								}
+								
+							}						
+							response.completeExceptionally(e);
+							return response;
+						}						
+
+					}
+				}				
+				catch (InterruptedException  e) {
+					LOG.debug(e.getLocalizedMessage(),e);
+				}
+
 
 		}while(waiter.waitUntil());
 		
-		throw AgentError.create(AgentError.AgentErrorCode.TIMEOUT_WAITING_FOR_RESPONSE);
+		
+		response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.TIMEOUT_WAITING_FOR_RESPONSE));
+		return response;
 	}	
 	
 }

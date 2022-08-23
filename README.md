@@ -316,26 +316,26 @@ byte[] buf = idlArgs.toBytes();
 
 To add IC4J Agent library to your Java project use Maven or Gradle import from Maven Central.
 
-<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.14/jar">
-https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.14/jar
+<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.15/jar">
+https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.6.15/jar
 </a>
 
 ```
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-agent</artifactId>
-  <version>0.6.14</version>
+  <version>0.6.15</version>
 </dependency>
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-candid</artifactId>
-  <version>0.6.14</version>
+  <version>0.6.15</version>
 </dependency>
 ```
 
 ```
-implementation 'org.ic4j:ic4j-agent:0.6.14'
-implementation 'org.ic4j:ic4j-candid:0.6.14'
+implementation 'org.ic4j:ic4j-agent:0.6.15'
+implementation 'org.ic4j:ic4j-candid:0.6.15'
 ```
 
 
@@ -354,6 +354,12 @@ To manage CBOR payloads.
 
 ### Bouncy Castle Cryptography Libraries
 To manage Ed25519 and Secp256k1 signatures.
+
+### Bouncy Castle Cryptography Libraries
+To manage Ed25519 and Secp256k1 signatures.
+
+### MIRACL Core Cryptographic Library
+To manage BLS12381 algorithm. 
 
 
 # Build

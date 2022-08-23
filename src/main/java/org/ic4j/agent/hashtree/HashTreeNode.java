@@ -82,9 +82,10 @@ public abstract class HashTreeNode {
 				try {
 					byte[] value = node.get(1).binaryValue();
 					
-					byte[] digest = DigestUtils.sha256(value);
+					if(value.length != 32)
+						throw new Error("Invalid Length");
 					
-					return new PrunedHashTreeNode(digest);	
+					return new PrunedHashTreeNode(value);	
 				} catch (IOException e) {
 					throw new Error(String.format("Invalid Node Type %s", node.getNodeType().name()));
 				}				
@@ -120,6 +121,7 @@ public abstract class HashTreeNode {
 				messageDigest.update(((LeafHashTreeNode)this).value);
 				break;
 			case PRUNED: 
+				int[] unsignedDigest = org.ic4j.candid.ByteUtils.toUnsignedIntegerArray(((PrunedHashTreeNode)this).digest);
 				return ((PrunedHashTreeNode)this).digest;
 		}		
 		

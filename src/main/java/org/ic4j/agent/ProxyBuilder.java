@@ -18,6 +18,7 @@ package org.ic4j.agent;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
@@ -35,6 +36,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.ic4j.agent.annotations.Canister;
@@ -53,7 +55,6 @@ import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.agent.annotations.Argument;
 import org.ic4j.candid.ObjectDeserializer;
 import org.ic4j.candid.ObjectSerializer;
-import org.ic4j.candid.annotations.Deserializer;
 import org.ic4j.candid.annotations.Ignore;
 import org.ic4j.candid.annotations.Name;
 import org.ic4j.candid.parser.IDLArgs;
@@ -251,7 +252,7 @@ public final class ProxyBuilder {
 		}
 
 		@Override
-		public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+		public Object invoke(Object proxy, Method method, Object[] args) throws AgentError {
 
 			if (method.isAnnotationPresent(QUERY.class) || method.isAnnotationPresent(UPDATE.class)) {
 				MethodType methodType = null;
@@ -272,15 +273,13 @@ public final class ProxyBuilder {
 
 				ArrayList<IDLValue> candidArgs = new ArrayList<IDLValue>();
 
-				
-
 				if (args != null)
 					for (int i = 0; i < args.length; i++) {
 						Object arg = args[i];
 						Argument argumentAnnotation = null;
 
 						boolean skip = false;
-						
+
 						ObjectSerializer objectSerializer = new PojoSerializer();
 
 						for (Annotation annotation : method.getParameterAnnotations()[i]) {
@@ -290,10 +289,15 @@ public final class ProxyBuilder {
 							}
 							if (Argument.class.isInstance(annotation))
 								argumentAnnotation = (Argument) annotation;
-							if (org.ic4j.candid.annotations.Serializer.class.isInstance(annotation))
-							{
-								Class<ObjectSerializer> serializerClass = (Class<ObjectSerializer>) ((org.ic4j.candid.annotations.Serializer) annotation).value();
-								objectSerializer = serializerClass.getConstructor().newInstance();
+							if (org.ic4j.candid.annotations.Serializer.class.isInstance(annotation)) {
+								Class<ObjectSerializer> serializerClass = (Class<ObjectSerializer>) ((org.ic4j.candid.annotations.Serializer) annotation)
+										.value();
+								try {
+									objectSerializer = serializerClass.getConstructor().newInstance();
+								} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
+										| InvocationTargetException | NoSuchMethodException | SecurityException e) {
+									throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e);
+								}
 							}
 						}
 
@@ -322,14 +326,19 @@ public final class ProxyBuilder {
 				IDLArgs idlArgs = IDLArgs.create(candidArgs);
 
 				byte[] buf = idlArgs.toBytes();
-				
+
 				ObjectDeserializer objectDeserializer;
-				
+
 				if (method.isAnnotationPresent(org.ic4j.candid.annotations.Deserializer.class)) {
-					Class<ObjectDeserializer> serializerClass = (Class<ObjectDeserializer>) method.getAnnotation(org.ic4j.candid.annotations.Deserializer.class).value();
-					objectDeserializer = serializerClass.getConstructor().newInstance();					
-				}
-				else
+					Class<ObjectDeserializer> serializerClass = (Class<ObjectDeserializer>) method
+							.getAnnotation(org.ic4j.candid.annotations.Deserializer.class).value();
+					try {
+						objectDeserializer = serializerClass.getConstructor().newInstance();
+					} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
+							| InvocationTargetException | NoSuchMethodException | SecurityException e) {
+						throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e);
+					}
+				} else
 					objectDeserializer = new PojoDeserializer();
 				switch (methodType) {
 				case QUERY: {
@@ -390,11 +399,18 @@ public final class ProxyBuilder {
 							return outArgs.getArgs().get(0).getValue(objectDeserializer, method.getReturnType());
 						}
 
-					} catch (Exception e) {
+					}
+					catch (AgentError e) {
+						throw e;
+					}
+					catch (Exception e) {
 						throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
 					}
 				}
 				case UPDATE: {
+
+					UPDATE updateMethod = method.getAnnotation(UPDATE.class);
+
 					UpdateBuilder updateBuilder = UpdateBuilder.create(this.agent, this.canisterId, methodName);
 
 					updateBuilder.effectiveCanisterId = this.effectiveCanisterId;
@@ -415,16 +431,28 @@ public final class ProxyBuilder {
 
 					CompletableFuture<Response<RequestId>> requestResponse = updateBuilder.arg(buf).call(null);
 
-					CompletableFuture<Response<byte[]>> builderResponse = updateBuilder
-							.getState(requestResponse.get().getPayload(), null, waiter);
+					RequestId requestId;
+					try {
+						requestId = requestResponse.get().getPayload();
+					} catch (ExecutionException e) {
+						if(e.getCause() != null && e.getCause() instanceof AgentError)
+							throw (AgentError)e.getCause();
+						else	
+							throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
+					}
+					catch (InterruptedException e) {
+						throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
+					}					
+					
+					CompletableFuture<Response<byte[]>> builderResponse = updateBuilder.getState(
+							requestId, null, updateMethod.disableRangeCheck(), waiter);
 
 					builderResponse.whenComplete((input, ex) -> {
 						if (ex == null) {
 							if (input != null) {
 								IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
 
-								if (outArgs.getArgs().isEmpty())
-								{
+								if (outArgs.getArgs().isEmpty()) {
 									if (method.getReturnType().equals(Void.TYPE))
 										response.complete(null);
 									else {
@@ -434,14 +462,14 @@ public final class ProxyBuilder {
 											if (responseClass.isAssignableFrom(Void.class))
 												response.complete(null);
 											else
-												response.completeExceptionally(AgentError.create(
-														AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+												response.completeExceptionally(
+														AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,
+																"Missing return value"));
 										} else
-											response.completeExceptionally(AgentError
-													.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+											response.completeExceptionally(AgentError.create(
+													AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
 									}
-								}
-								else {
+								} else {
 									Class<?> responseClass = getMethodClass(method);
 
 									if (responseClass != null) {
@@ -450,8 +478,8 @@ public final class ProxyBuilder {
 										else if (responseClass.isAssignableFrom(Response.class))
 											response.complete(input);
 										else
-											response.complete(
-													outArgs.getArgs().get(0).getValue(objectDeserializer, responseClass));
+											response.complete(outArgs.getArgs().get(0).getValue(objectDeserializer,
+													responseClass));
 									} else
 										response.complete(outArgs.getArgs().get(0).getValue());
 								}
@@ -471,7 +499,13 @@ public final class ProxyBuilder {
 											.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
 							}
 						} else
-							response.completeExceptionally(ex);
+						{
+							if(ex instanceof AgentError)
+								response.completeExceptionally(ex);
+							else
+								response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,ex));						
+						}
+							
 					});
 					return response;
 				}
