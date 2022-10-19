@@ -708,6 +708,10 @@ public final class Agent {
 		
 		byte[] key = ResponseAuthentication.extractDer(derKey);		
 		
+		int[] unsignedSig = ByteUtils.toUnsignedIntegerArray(sig);
+		int[] unsignedMsg = ByteUtils.toUnsignedIntegerArray(msg);
+		int[] unsignedKey = ByteUtils.toUnsignedIntegerArray(key);
+		
 		int verifyResponse = BLS.core_verify(sig,msg,key);
 		
 		if (verifyResponse==0)

@@ -48,6 +48,7 @@ import org.ic4j.agent.AgentError;
 import org.ic4j.agent.ReplicaResponse;
 import org.ic4j.agent.ReplicaTransport;
 import org.ic4j.agent.requestid.RequestId;
+import org.ic4j.candid.ByteUtils;
 import org.ic4j.types.Principal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -214,6 +215,8 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 
 					if (bytes == null)
 						bytes = ArrayUtils.EMPTY_BYTE_ARRAY;
+					
+					int[] unsignedBytes = ByteUtils.toUnsignedIntegerArray(bytes);
 					
 					replicaResponse.payload = bytes;
 

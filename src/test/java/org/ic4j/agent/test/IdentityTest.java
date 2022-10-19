@@ -229,15 +229,16 @@ public class IdentityTest {
 	        	    221, 155, 201, 119, 224, 93, 99, 40, 248, 137, 220, 78, 124, 153, 17, 76, 115, 122, 73, 70, 83,
 	        	    203, 39, 161, 245, 92, 6, 244, 85, 94, 15, 22, 9, 128, 175, 94, 173, 9, 138, 204, 25, 80, 16,
 	        	    178, 247};
-
-
-	        byte[] array = ByteUtils.toSignedByteArray(data);
-		
-			ReadStateResponse readStateResponse = objectMapper.readValue(array, ReadStateResponse.class);
-			
+	        
+	        
 			Agent agent = new AgentBuilder().transport(ReplicaApacheHttpTransport.create(TestProperties.IC_URL)).nonceFactory(new NonceFactory())
 					.build();
-						
+			
+	        
+	        byte[] array = ByteUtils.toSignedByteArray(data);
+	        
+	        ReadStateResponse readStateResponse = objectMapper.readValue(array, ReadStateResponse.class);
+	        
 			Certificate certificate = objectMapper.readValue(readStateResponse.certificate, Certificate.class);
 			
 			agent.verify(certificate, Principal.fromString("ivg37-qiaaa-aaaab-aaaga-cai"), false);
