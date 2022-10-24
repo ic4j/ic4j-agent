@@ -37,7 +37,7 @@ public final class ResponseAuthentication {
 	
 	static {
 		try {
-			DER_PREFIX = Hex.decodeHex("308182301d060d2b0601040182dc7c0503010201060c2b0601040182dc7c05030201036100");
+			DER_PREFIX = Hex.decodeHex("308182301d060d2b0601040182dc7c0503010201060c2b0601040182dc7c05030201036100".toCharArray());
 		} catch (DecoderException e) {
 			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
 		}

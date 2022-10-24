@@ -56,7 +56,10 @@ public final class RequestId {
 	{
 
 		try {
-			return new RequestId((Hex.decodeHex(hexValue)));
+			if(hexValue == null)
+				throw RequestIdError.create(RequestIdError.RequestIdErrorCode.EMPTY_SERIALIZER);
+			
+			return new RequestId((Hex.decodeHex(hexValue.toCharArray())));
 		} catch (DecoderException e) {
 			throw RequestIdError.create(RequestIdError.RequestIdErrorCode.CUSTOM_SERIALIZER_ERROR, e, e.getLocalizedMessage());
 		}
