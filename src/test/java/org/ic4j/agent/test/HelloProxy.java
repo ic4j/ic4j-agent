@@ -15,15 +15,18 @@ import org.ic4j.agent.annotations.Waiter;
 import org.ic4j.agent.annotations.QUERY;
 import org.ic4j.agent.annotations.UPDATE;
 import org.ic4j.agent.annotations.Argument;
+import org.ic4j.candid.annotations.Modes;
 import org.ic4j.candid.annotations.Name;
+import org.ic4j.candid.types.Mode;
 import org.ic4j.candid.types.Type;
+import org.ic4j.types.Func;
 
 @Agent(identity = @Identity(type = IdentityType.BASIC, pem_file = "./src/test/resources/Ed25519_identity.pem"), transport = @Transport(url = "http://localhost:8001"))
-@Canister("rrkah-fqaaa-aaaaa-aaaaq-cai")
-@EffectiveCanister("rrkah-fqaaa-aaaaa-aaaaq-cai")
+@Canister("un4fu-tqaaa-aaaab-qadjq-cai")
+@EffectiveCanister("un4fu-tqaaa-aaaab-qadjq-cai")
 public interface HelloProxy {
 	
-	@QUERY
+	@Modes(Mode.QUERY)
 	public String peek(@Argument(Type.TEXT)String name, @Argument(Type.INT) BigInteger value);
 	
 	@QUERY
@@ -40,6 +43,10 @@ public interface HelloProxy {
 	
 	@QUERY
 	public ComplexPojo echoComplexPojo(ComplexPojo value);
+	
+	@Modes(Mode.QUERY)
+	@Name("echoFunc2")
+	public Func echoFunc(Func value);
 	
 	@UPDATE
 	@Waiter(timeout = 30)
@@ -65,7 +72,7 @@ public interface HelloProxy {
 	@QUERY
 	public CompletableFuture<Double> getFloat(Double value);
 	
-	@UPDATE
+//	@UPDATE
 	@Name("greet")
 	@Waiter(timeout = 30)
 	public CompletableFuture<String> greet(@Argument(Type.TEXT)String name);

@@ -1,8 +1,10 @@
 package org.ic4j.agent.test;
 
 
+import java.io.IOException;
 import java.math.BigInteger;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyPair;
@@ -17,11 +19,18 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerException;
+
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.ic4j.agent.Agent;
 import org.ic4j.agent.AgentBuilder;
 import org.ic4j.agent.AgentError;
+import org.ic4j.agent.FuncProxy;
 import org.ic4j.agent.Response;
+import org.ic4j.agent.ServiceProxy;
 import org.ic4j.agent.NonceFactory;
 import org.ic4j.agent.ProxyBuilder;
 import org.ic4j.agent.ReplicaTransport;
@@ -33,24 +42,57 @@ import org.ic4j.agent.http.ReplicaOkHttpTransport;
 import org.ic4j.agent.identity.BasicIdentity;
 import org.ic4j.agent.identity.Identity;
 import org.ic4j.agent.requestid.RequestId;
+import org.ic4j.candid.dom.DOMDeserializer;
+import org.ic4j.candid.dom.DOMSerializer;
+import org.ic4j.candid.dom.DOMUtils;
+import org.ic4j.candid.jackson.JacksonDeserializer;
+import org.ic4j.candid.jackson.JacksonSerializer;
 import org.ic4j.candid.parser.IDLArgs;
 import org.ic4j.candid.parser.IDLType;
 import org.ic4j.candid.parser.IDLValue;
 import org.ic4j.candid.pojo.PojoDeserializer;
 import org.ic4j.candid.pojo.PojoSerializer;
 import org.ic4j.candid.types.Label;
+import org.ic4j.candid.types.Mode;
 import org.ic4j.candid.types.Type;
+import org.ic4j.types.Func;
 import org.ic4j.types.Principal;
+import org.ic4j.types.Service;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.skyscreamer.jsonassert.JSONAssert;
+import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.xml.sax.SAXException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ICTest {
 	static final Logger LOG = LoggerFactory.getLogger(ICTest.class);
+	
+	static final String SIMPLE_JSON_NODE_FILE = "SimpleNode.json";
+	static final String SIMPLE_JSON_ARRAY_NODE_FILE = "SimpleArrayNode.json";	
+	static final String SIMPLE_DOM_NODE_FILE = "SimpleNode.xml";
+	static final String SIMPLE_DOM_ARRAY_NODE_FILE = "ComplexNode.xml";	
+	static final String LOAN_APPLICATION_NODE_FILE = "LoanApplication.xml";
+	static final String IC_TEST_IDL_FILE = "ICTest.did";
+	
+	
+	// Instantiate the Factory
+	DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();	
+
+	ObjectMapper mapper = new ObjectMapper();
 
 	@Test
 	public void test() {
+		dbf.setNamespaceAware(true);
+		dbf.setIgnoringElementContentWhitespace(true);
+		
 		ReplicaTransport transport;
 
 		try {		
@@ -79,8 +121,106 @@ public class ICTest {
 
 			Agent agent = new AgentBuilder().transport(transport).identity(identity).nonceFactory(new NonceFactory())
 					.build();
-
+			
 			try {
+				String idlFile = agent.getIDL(Principal.fromString(TestProperties.IC_CANISTER_ID));
+				
+				Service service = new Service(Principal.fromString(TestProperties.IC_CANISTER_ID));
+				
+				ProxyBuilder proxyBuilder = ProxyBuilder.create(agent).loadIDL(true);
+				
+				ServiceProxy serviceProxy = proxyBuilder.getServiceProxy(service);
+				
+				Func funcValue = new Func("peek");
+				
+				FuncProxy<String> funcProxy = serviceProxy.getFuncProxy(funcValue);
+				
+				String peek = funcProxy.call("Motoko", BigInteger.valueOf(100));
+				
+				Assertions.assertEquals("Hello, Motoko!",peek);
+				
+				funcValue = new Func("greet");
+				
+				FuncProxy<String> greetFuncProxy = serviceProxy.getFuncProxy(funcValue);
+				
+				String greetResponse = greetFuncProxy.call("Motoko");
+				
+				Assertions.assertEquals("Hello, Motoko!",greetResponse);
+				
+				funcValue = new Func(Principal.fromString(TestProperties.IC_CANISTER_ID), "greet");
+				
+				greetFuncProxy = proxyBuilder.getFuncProxy(funcValue);
+				
+				greetResponse = greetFuncProxy.call("Motoko");
+				
+				Assertions.assertEquals("Hello, Motoko!",greetResponse);
+				
+				Pojo pojoValue = new Pojo();
+				
+				pojoValue.bar = new Boolean(false);
+				pojoValue.foo = BigInteger.valueOf(43); 
+				
+				ComplexPojo complexPojoValue = new ComplexPojo();
+				complexPojoValue.bar = new Boolean(true);
+				complexPojoValue.foo = BigInteger.valueOf(42);
+				
+				complexPojoValue.pojo = pojoValue;
+				
+				funcValue = new Func(Principal.fromString(TestProperties.IC_CANISTER_ID), "echoComplexPojo");
+				
+				FuncProxy<ComplexPojo> complexPojoFuncProxy = serviceProxy.getFuncProxy(funcValue);
+				
+				complexPojoFuncProxy.setResponseClass(ComplexPojo.class);
+				
+				ComplexPojo complexPojoResponse = complexPojoFuncProxy.call(complexPojoValue);
+				
+				Assertions.assertEquals(complexPojoValue, complexPojoResponse);
+				
+				JsonNode jsonValue = readJacksonNode(SIMPLE_JSON_NODE_FILE);
+				
+				funcValue = new Func(Principal.fromString(TestProperties.IC_CANISTER_ID), "echoPojo");
+				
+				FuncProxy<JsonNode> jacksonPojoFuncProxy = serviceProxy.getFuncProxy(funcValue);
+				
+				jacksonPojoFuncProxy.setSerializers(new JacksonSerializer());
+				jacksonPojoFuncProxy.setDeserializer(new JacksonDeserializer());
+				
+				jacksonPojoFuncProxy.setResponseClass(JsonNode.class);
+				
+				JsonNode jsonResult = jacksonPojoFuncProxy.call(jsonValue);
+				
+				JSONAssert.assertEquals(jsonValue.asText(), jsonResult.asText(), JSONCompareMode.LENIENT);
+				
+				Node domValue = this.readDOMNode(SIMPLE_DOM_NODE_FILE);
+				
+				FuncProxy<Node> domPojoFuncProxy = serviceProxy.getFuncProxy(funcValue);
+				
+				DOMDeserializer domDeserializer = DOMDeserializer.create()
+						.rootElement("http://ic4j.org/candid/test", "pojo")
+						.setAttributes(true);
+				
+				domPojoFuncProxy.setSerializers(new DOMSerializer());
+				domPojoFuncProxy.setDeserializer(domDeserializer);
+				
+				domPojoFuncProxy.setResponseClass(Node.class);
+				
+				Node domResult = domPojoFuncProxy.call(domValue);
+					
+				HelloProxy helloProxy = proxyBuilder.getProxy(service, HelloProxy.class);
+				
+				funcValue = new Func(Principal.fromString("w7x7r-cok77-xa"),"a");
+				
+				Func funcResult = helloProxy.echoFunc(funcValue);
+				
+				Assertions.assertEquals(funcValue,funcResult);
+				
+				funcValue = new Func(Principal.fromString(TestProperties.IC_CANISTER_ID),"peek");
+				
+				funcProxy = proxyBuilder.getFuncProxy(funcValue, HelloProxy.class);
+				
+				peek = funcProxy.call("Motoko", BigInteger.valueOf(100));
+				
+				Assertions.assertEquals("Hello, Motoko!",peek);
 
 				List<IDLValue> args = new ArrayList<IDLValue>();
 
@@ -97,6 +237,18 @@ public class ICTest {
 				CompletableFuture<byte[]> queryResponse = agent.queryRaw(
 						Principal.fromString(TestProperties.IC_CANISTER_ID),
 						Principal.fromString(TestProperties.IC_CANISTER_ID), "peek", buf, Optional.empty());
+				
+				Path idlPath = Paths.get(getClass().getClassLoader().getResource(IC_TEST_IDL_FILE).getPath());
+				
+				proxyBuilder = ProxyBuilder.create(agent).idlFile(idlPath);
+			
+				funcValue = new Func(Principal.fromString(TestProperties.IC_CANISTER_ID),"peek");
+				
+				funcProxy = proxyBuilder.getFuncProxy(funcValue);
+				
+				peek = funcProxy.call("Motoko", BigInteger.valueOf(100));
+				
+				Assertions.assertEquals("Hello, Motoko!",peek);
 
 				try {
 					byte[] queryOutput = queryResponse.get();
@@ -108,7 +260,7 @@ public class ICTest {
 				} catch (Throwable ex) {
 					LOG.debug(ex.getLocalizedMessage(), ex);
 					Assertions.fail(ex.getLocalizedMessage());
-				}
+				}								
 				
 				args = new ArrayList<IDLValue>();
 
@@ -285,7 +437,7 @@ public class ICTest {
 				LOG.info(outArgs.getArgs().get(0).getValue().toString());
 
 				Assertions.assertEquals(outArgs.getArgs().get(0).getValue().toString(), "Hello, " + value + "!");
-
+				
 				
 				// test with headers
 				
@@ -319,8 +471,7 @@ public class ICTest {
 
 				LOG.debug(requestStatusResponse.status.toString());
 
-				Assertions.assertEquals(requestStatusResponse.status.toString(),
-						RequestStatusResponse.REPLIED_STATUS_VALUE);
+				Assertions.assertEquals(RequestStatusResponse.REPLIED_STATUS_VALUE,requestStatusResponse.status.toString());
 
 				output = requestStatusResponse.replied.get().arg;
 
@@ -431,12 +582,12 @@ public class ICTest {
 				LOG.info(result);
 				Assertions.assertEquals("Hello, " + value + "!", result);
 				
-				Pojo pojoValue = new Pojo();
+				pojoValue = new Pojo();
 				
 				pojoValue.bar = new Boolean(false);
 				pojoValue.foo = BigInteger.valueOf(43); 
 				
-				ComplexPojo complexPojoValue = new ComplexPojo();
+				complexPojoValue = new ComplexPojo();
 				complexPojoValue.bar = new Boolean(true);
 				complexPojoValue.foo = BigInteger.valueOf(42);	
 				
@@ -499,7 +650,182 @@ public class ICTest {
 				Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
 				Assertions.assertTrue(headers.containsKey("Content-Type"));
 				
-				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");				
+				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");	
+				
+				// test functions
+				
+
+				
+				List<IDLType> funcArgs = new ArrayList<IDLType>();
+				List<IDLType> funcRets = new ArrayList<IDLType>();
+				List<Mode> funcModes = new ArrayList<Mode>();
+				
+				
+				funcArgs = new ArrayList<IDLType>();
+				funcRets = new ArrayList<IDLType>();
+				funcModes = new ArrayList<Mode>();
+				
+				idlValue = IDLValue.create(funcValue, IDLType.createType(funcArgs,funcRets,funcModes));
+				
+				args = new ArrayList<IDLValue>();
+
+				args.add(idlValue);
+				
+				idlArgs = IDLArgs.create(args);
+
+				buf = idlArgs.toBytes();
+				
+				queryResponse = agent.queryRaw(Principal.fromString(TestProperties.IC_CANISTER_ID),
+						Principal.fromString(TestProperties.IC_CANISTER_ID), "echoFunc0", buf, Optional.empty());
+				
+				try {
+					byte[] queryOutput = queryResponse.get();
+					
+					Assertions.assertArrayEquals(buf, queryOutput);		
+
+					outArgs = IDLArgs.fromBytes(queryOutput);
+					
+					funcResult = outArgs.getArgs().get(0).getValue();				
+
+					Assertions.assertEquals(funcValue, funcResult);
+
+				} catch (Throwable ex) {
+					LOG.debug(ex.getLocalizedMessage(), ex);
+					Assertions.fail(ex.getLocalizedMessage());
+				}	
+				
+				funcArgs.add(IDLType.createType(Type.TEXT));
+				funcRets.add(IDLType.createType(Type.TEXT));
+				
+				idlValue = IDLValue.create(funcValue, IDLType.createType(funcArgs,funcRets,funcModes));
+				
+				args = new ArrayList<IDLValue>();
+
+				args.add(idlValue);
+				
+				idlArgs = IDLArgs.create(args);
+
+				buf = idlArgs.toBytes();
+				
+				queryResponse = agent.queryRaw(Principal.fromString(TestProperties.IC_CANISTER_ID),
+						Principal.fromString(TestProperties.IC_CANISTER_ID), "echoFunc1", buf, Optional.empty());
+				
+				try {
+					byte[] queryOutput = queryResponse.get();
+					
+					Assertions.assertArrayEquals(buf, queryOutput);	
+
+					outArgs = IDLArgs.fromBytes(queryOutput);
+					
+					funcResult = outArgs.getArgs().get(0).getValue();
+					
+					Assertions.assertEquals(funcValue, funcResult);
+
+				} catch (Throwable ex) {
+					LOG.debug(ex.getLocalizedMessage(), ex);
+					Assertions.fail(ex.getLocalizedMessage());
+				}
+				
+				funcRets = new ArrayList<IDLType>();
+				funcModes.add(Mode.ONEWAY);
+				
+				idlValue = IDLValue.create(funcValue, IDLType.createType(funcArgs,funcRets,funcModes));
+				
+				args = new ArrayList<IDLValue>();
+
+				args.add(idlValue);
+				
+				idlArgs = IDLArgs.create(args);
+
+				buf = idlArgs.toBytes();
+				
+				queryResponse = agent.queryRaw(Principal.fromString(TestProperties.IC_CANISTER_ID),
+						Principal.fromString(TestProperties.IC_CANISTER_ID), "echoFunc3", buf, Optional.empty());
+				
+				try {
+					byte[] queryOutput = queryResponse.get();
+					
+					Assertions.assertArrayEquals(buf, queryOutput);	
+
+					outArgs = IDLArgs.fromBytes(queryOutput);
+					
+					funcResult = outArgs.getArgs().get(0).getValue();
+					
+					Assertions.assertEquals(funcValue, funcResult);
+
+				} catch (Throwable ex) {
+					LOG.debug(ex.getLocalizedMessage(), ex);
+					Assertions.fail(ex.getLocalizedMessage());
+				}				
+				
+				funcArgs.add(IDLType.createType(Type.BOOL));
+				
+				idlValue = IDLValue.create(funcValue, IDLType.createType(funcArgs,funcRets,funcModes));
+				
+				args = new ArrayList<IDLValue>();
+
+				args.add(idlValue);
+				
+				idlArgs = IDLArgs.create(args);
+
+				buf = idlArgs.toBytes();
+				
+				queryResponse = agent.queryRaw(Principal.fromString(TestProperties.IC_CANISTER_ID),
+						Principal.fromString(TestProperties.IC_CANISTER_ID), "echoFunc2", buf, Optional.empty());
+				
+				try {
+					byte[] queryOutput = queryResponse.get();
+					
+					Assertions.assertArrayEquals(buf, queryOutput);	
+
+					outArgs = IDLArgs.fromBytes(queryOutput);
+					
+					funcResult = outArgs.getArgs().get(0).getValue();
+					
+					Assertions.assertEquals(funcValue, funcResult);
+
+				} catch (Throwable ex) {
+					LOG.debug(ex.getLocalizedMessage(), ex);
+					Assertions.fail(ex.getLocalizedMessage());
+				}				
+
+				funcArgs = new ArrayList<IDLType>();
+				funcRets = new ArrayList<IDLType>();
+				funcModes = new ArrayList<Mode>();
+				
+				funcRets.add(IDLType.createType(Type.TEXT));
+				funcModes.add(Mode.QUERY);
+				
+				idlValue = IDLValue.create(funcValue, IDLType.createType(funcArgs,funcRets,funcModes));
+				
+				args = new ArrayList<IDLValue>();
+
+				args.add(idlValue);
+				
+				idlArgs = IDLArgs.create(args);
+
+				buf = idlArgs.toBytes();
+				
+				queryResponse = agent.queryRaw(Principal.fromString(TestProperties.IC_CANISTER_ID),
+						Principal.fromString(TestProperties.IC_CANISTER_ID), "echoFunc4", buf, Optional.empty());
+				
+				try {
+					byte[] queryOutput = queryResponse.get();
+					
+					Assertions.assertArrayEquals(buf, queryOutput);		
+
+					outArgs = IDLArgs.fromBytes(queryOutput);
+					
+					funcResult = outArgs.getArgs().get(0).getValue();
+					
+					Assertions.assertEquals(funcValue, funcResult);
+
+				} catch (Throwable ex) {
+					LOG.debug(ex.getLocalizedMessage(), ex);
+					Assertions.fail(ex.getLocalizedMessage());
+				}	
+				
+								
 
 			} catch (Throwable ex) {
 				LOG.error(ex.getLocalizedMessage(), ex);
@@ -520,5 +846,27 @@ public class ICTest {
 		}
 
 	}
+	
+	JsonNode readJacksonNode(String fileName) throws JsonProcessingException, IOException {
+		byte[] input = Files.readAllBytes(Paths.get(getClass().getClassLoader().getResource(fileName).getPath()));
+
+		JsonNode rootNode = (JsonNode) mapper.readTree(input);
+
+		return rootNode;
+	}
+	
+	Node readDOMNode(String fileName) throws SAXException, IOException, ParserConfigurationException {
+		// parse XML file
+		DocumentBuilder db = dbf.newDocumentBuilder();
+
+		Document doc = db.parse(getClass().getClassLoader().getResource(fileName).getFile());
+
+		try {
+			String domString = DOMUtils.getStringFromDocument(doc);
+		} catch (TransformerException e) {
+
+		}
+		return doc.getDocumentElement();
+	}	
 
 }

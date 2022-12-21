@@ -19,6 +19,7 @@ public class Pojo {
 	@Ignore
 	public String dummy;
 	
+	
 	// Just for testing purposes, JUnit uses equals
 	@Override
 	public boolean equals(Object obj) {

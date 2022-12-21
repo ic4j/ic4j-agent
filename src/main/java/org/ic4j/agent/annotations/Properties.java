@@ -14,8 +14,19 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent;
+package org.ic4j.agent.annotations;
 
-enum MethodType {
-	QUERY,UPDATE,ONEWAY;
+import static java.lang.annotation.ElementType.TYPE;
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
+
+import java.lang.annotation.Documented;
+import java.lang.annotation.Retention;
+import java.lang.annotation.Target;
+
+@Documented
+@Retention(RUNTIME)
+@Target({ TYPE })
+public @interface Properties {
+	boolean loadIDL() default false;
+	boolean disableRangeCheck() default false;	
 }

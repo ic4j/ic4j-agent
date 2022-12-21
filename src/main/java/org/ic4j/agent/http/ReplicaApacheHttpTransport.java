@@ -201,26 +201,34 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 
 				@Override
 				public void completed(SimpleHttpResponse httpResponse) {
-					LOG.debug(requestUri + "->" + httpResponse.getCode());
+					try {
+						LOG.debug(requestUri + "->" + httpResponse.getCode());
 
-					ReplicaResponse replicaResponse = new ReplicaResponse();
-					byte[] bytes = httpResponse.getBodyBytes();
-					
-					replicaResponse.headers = new HashMap<String,String>();
-					
-					Header[] headers = httpResponse.getHeaders();
-					
-					for(Header header : headers)
-						replicaResponse.headers.put(header.getName(), header.getValue());			
+						ReplicaResponse replicaResponse = new ReplicaResponse();
+						byte[] bytes = httpResponse.getBodyBytes();
+						
+						replicaResponse.headers = new HashMap<String,String>();
+						
+						Header[] headers = httpResponse.getHeaders();
+						
+						for(Header header : headers)
+							replicaResponse.headers.put(header.getName(), header.getValue());			
 
-					if (bytes == null)
-						bytes = ArrayUtils.EMPTY_BYTE_ARRAY;
-					
-					int[] unsignedBytes = ByteUtils.toUnsignedIntegerArray(bytes);
-					
-					replicaResponse.payload = bytes;
+						if (bytes == null)
+							bytes = ArrayUtils.EMPTY_BYTE_ARRAY;
+						
+						int[] unsignedBytes = ByteUtils.toUnsignedIntegerArray(bytes);
+						
+						replicaResponse.payload = bytes;
 
-					response.complete(replicaResponse);
+						response.complete(replicaResponse);						
+					}catch(Throwable t)
+					{
+						LOG.debug(requestUri + "->" + t);
+						response.completeExceptionally(
+								AgentError.create(AgentError.AgentErrorCode.HTTP_ERROR, t, t.getLocalizedMessage()));						
+					}
+
 				}
 
 				@Override

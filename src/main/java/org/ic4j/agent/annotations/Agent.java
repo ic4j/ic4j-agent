@@ -29,4 +29,5 @@ import java.lang.annotation.Target;
 public @interface Agent {
 	Transport transport();
 	Identity identity() ;
+	boolean fetchRootKey() default false;
 }

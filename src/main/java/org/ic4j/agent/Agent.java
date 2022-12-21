@@ -17,6 +17,7 @@
 package org.ic4j.agent;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -45,6 +46,8 @@ import org.ic4j.agent.replicaapi.ReadStateContent;
 import org.ic4j.agent.replicaapi.ReadStateResponse;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.candid.ByteUtils;
+import org.ic4j.candid.parser.IDLArgs;
+import org.ic4j.candid.parser.IDLValue;
 import org.ic4j.types.Principal;
 import org.miracl.core.BLS12381.BLS;
 import org.slf4j.Logger;
@@ -210,6 +213,35 @@ public final class Agent {
 		});
 
 		return response;
+	}
+	
+	public String getIDL(Principal canisterId) throws AgentError
+	{
+		List<IDLValue> args = new ArrayList<IDLValue>();
+
+		IDLArgs idlArgs = IDLArgs.create(args);
+
+		byte[] buf = idlArgs.toBytes();
+
+		CompletableFuture<byte[]> queryResponse = this.queryRaw(
+				canisterId,
+				canisterId, "__get_candid_interface_tmp_hack", buf, Optional.empty());
+
+		try {
+			byte[] queryOutput = queryResponse.get();
+
+			IDLArgs outArgs = IDLArgs.fromBytes(queryOutput);
+			
+			return outArgs.getArgs().get(0).getValue();
+		}catch(AgentError e)
+		{
+			throw e;
+			
+		} catch (InterruptedException e) {
+			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+		} catch (ExecutionException e) {
+			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+		}
 	}
 	
 	public CompletableFuture<Response<byte[]>> queryRaw(Principal canisterId, Principal effectiveCanisterId, String method, Request<byte[]> request

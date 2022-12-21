@@ -16,6 +16,9 @@
 
 package org.ic4j.agent;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -24,6 +27,7 @@ import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyPair;
@@ -34,9 +38,13 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Optional;
+import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.ic4j.agent.annotations.Canister;
@@ -56,14 +64,19 @@ import org.ic4j.agent.annotations.Argument;
 import org.ic4j.candid.ObjectDeserializer;
 import org.ic4j.candid.ObjectSerializer;
 import org.ic4j.candid.annotations.Ignore;
+import org.ic4j.candid.annotations.Modes;
 import org.ic4j.candid.annotations.Name;
 import org.ic4j.candid.parser.IDLArgs;
+import org.ic4j.candid.parser.IDLParser;
 import org.ic4j.candid.parser.IDLType;
 import org.ic4j.candid.parser.IDLValue;
 import org.ic4j.candid.pojo.PojoDeserializer;
 import org.ic4j.candid.pojo.PojoSerializer;
+import org.ic4j.candid.types.Mode;
 import org.ic4j.candid.types.Type;
+import org.ic4j.types.Func;
 import org.ic4j.types.Principal;
+import org.ic4j.types.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,8 +91,24 @@ public final class ProxyBuilder {
 	Principal effectiveCanisterId;
 	Principal canisterId;
 	Optional<Long> ingressExpiryDatetime;
+	IDLType serviceType;
+	
+	Map<Principal,IDLType> serviceTypes = new WeakHashMap<Principal,IDLType>();
+	
+	Path idlFile;
+	
+	private boolean disableRangeCheck = false;
+	
+	private boolean loadIDL = false;
 
 	private Waiter waiter;
+
+	ProxyBuilder(Agent agent) {
+		Security.addProvider(new BouncyCastleProvider());
+
+		this.agent = agent;
+		this.ingressExpiryDatetime = Optional.empty();
+	}
 
 	ProxyBuilder(Agent agent, Principal canisterId) {
 		Security.addProvider(new BouncyCastleProvider());
@@ -102,6 +131,10 @@ public final class ProxyBuilder {
 		Security.addProvider(new BouncyCastleProvider());
 
 		this.ingressExpiryDatetime = Optional.empty();
+	}
+
+	public static ProxyBuilder create(Agent agent) {
+		return new ProxyBuilder(agent);
 	}
 
 	public static ProxyBuilder create(Agent agent, Principal canisterId) {
@@ -154,8 +187,105 @@ public final class ProxyBuilder {
 
 		return this;
 	}
+	
+	
+	/* Candid IDL file describing service
+	 * 
+	 */
+	public ProxyBuilder idlFile(Path idlFile) {
+		this.idlFile = idlFile;
+
+		this.loadIDL = true;
+		return this;
+	}
+	
+	/* Disable Range Check
+	 * 
+	 */
+	public ProxyBuilder disableRangeCheck(boolean disableRangeCheck) {
+		this.disableRangeCheck = disableRangeCheck;
+
+		return this;
+	}
+	
+	/* Disable Range Check
+	 * 
+	 */
+	public ProxyBuilder loadIDL(boolean loadIDL) {
+		this.loadIDL = loadIDL;
+
+		return this;
+	}	
+	
+	public <T> FuncProxy<T> getFuncProxy(Func func) {
+		if (func != null && func.getPrincipal() != null)
+			this.canisterId = func.getPrincipal();
+		
+		Service service = new Service(this.canisterId);
+		
+		ServiceProxy serviceProxy = this.getServiceProxy(service);
+		
+		return serviceProxy.getFuncProxy(func);
+	}
+	
+	public <T> FuncProxy<T> getFuncProxy(Func func, Class<?> interfaceClass) {
+		if (func != null && func.getPrincipal() != null)
+			this.canisterId = func.getPrincipal();
+		
+		AgentInvocationHandler agentInvocationHandler = this.getAgentInvocationHandler(interfaceClass);	
+		
+		Object proxy = this.getProxy(interfaceClass);
+		
+		Method[] methods = interfaceClass.getDeclaredMethods();
+		
+		for(Method method : methods)
+		{
+			String name = method.getName();
+			
+			if (method.isAnnotationPresent(Name.class)) {
+				Name nameAnnotation = method.getAnnotation(Name.class);
+				name = nameAnnotation.value();
+			}
+			
+			if(name.equals(func.getMethod()))
+				return new FuncProxy<T>(proxy , method, agentInvocationHandler);
+		}
+		
+		throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Candid function %s not defined", func.getMethod());		
+	}
+
+	public <T> T getProxy(Service service, Class<T> interfaceClass) {
+		if (service != null)
+			this.canisterId = service.getPrincipal();
+		
+
+		return this.getProxy(interfaceClass);
+	}
+	
+	public ServiceProxy getServiceProxy(Service service) {
+		if (service != null)
+			this.canisterId = service.getPrincipal();
+		
+		this.parseServiceType();
+
+		return new ServiceProxy(this);
+	}	
+	
 
 	public <T> T getProxy(Class<T> interfaceClass) {
+		
+		
+		AgentInvocationHandler agentInvocationHandler = this.getAgentInvocationHandler(interfaceClass);		
+		
+		T proxy = (T) Proxy.newProxyInstance(interfaceClass.getClassLoader(), new Class[] { interfaceClass },
+				agentInvocationHandler);
+		
+		this.parseServiceType();
+
+		return proxy;
+	}
+	
+	<T> AgentInvocationHandler getAgentInvocationHandler(Class<T> interfaceClass) {
 
 		Agent agent = this.agent;
 
@@ -195,6 +325,10 @@ public final class ProxyBuilder {
 					}
 
 					agent = new AgentBuilder().transport(transport).identity(identity).build();
+					
+					if(agentAnnotation.fetchRootKey())
+						agent.fetchRootKey();
+					
 				} catch (URISyntaxException e) {
 					throw AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_URL, e,
 							transportAnnotation.url());
@@ -226,13 +360,24 @@ public final class ProxyBuilder {
 					effectiveCanisterId = canisterId.clone();
 			}
 		}
+		
+		if (interfaceClass.isAnnotationPresent(org.ic4j.agent.annotations.IDLFile.class))
+		{
+			String idlFileURL = interfaceClass.getAnnotation(org.ic4j.agent.annotations.IDLFile.class).value(); 
+			this.idlFile = Paths.get(idlFileURL); 
+		}
+		if (interfaceClass.isAnnotationPresent(org.ic4j.agent.annotations.Properties.class))
+		{
+			org.ic4j.agent.annotations.Properties properties = interfaceClass.getAnnotation(org.ic4j.agent.annotations.Properties.class);
+			
+			if(properties.disableRangeCheck())
+				this.disableRangeCheck = true;
+			if(properties.loadIDL())
+				this.loadIDL = true;
+		}
 
-		AgentInvocationHandler agentInvocationHandler = new AgentInvocationHandler(agent, canisterId,
+		return new AgentInvocationHandler(agent, canisterId,
 				effectiveCanisterId, this.ingressExpiryDatetime, waiter);
-		T proxy = (T) Proxy.newProxyInstance(interfaceClass.getClassLoader(), new Class[] { interfaceClass },
-				agentInvocationHandler);
-
-		return proxy;
 	}
 
 	class AgentInvocationHandler implements InvocationHandler {
@@ -254,268 +399,631 @@ public final class ProxyBuilder {
 		@Override
 		public Object invoke(Object proxy, Method method, Object[] args) throws AgentError {
 
-			if (method.isAnnotationPresent(QUERY.class) || method.isAnnotationPresent(UPDATE.class)) {
-				MethodType methodType = null;
+			MethodType methodType = MethodType.UPDATE;
 
-				String methodName = method.getName();
+			String methodName = method.getName();
 
-				if (method.isAnnotationPresent(QUERY.class))
-					methodType = MethodType.QUERY;
-				else if (method.isAnnotationPresent(UPDATE.class))
-					methodType = MethodType.UPDATE;
+			if (method.isAnnotationPresent(QUERY.class))
+				methodType = MethodType.QUERY;
+			else if (method.isAnnotationPresent(UPDATE.class))
+				methodType = MethodType.UPDATE;
 
-				if (method.isAnnotationPresent(Name.class)) {
-					Name nameAnnotation = method.getAnnotation(Name.class);
-					methodName = nameAnnotation.value();
+			// the new way how to define operation type
+			if (method.isAnnotationPresent(Modes.class)) {
+				Mode[] modes = method.getAnnotation(Modes.class).value();
+
+				if (modes.length > 0) {
+					switch (modes[0]) {
+					case QUERY:
+						methodType = MethodType.QUERY;
+						break;
+					case ONEWAY:
+						methodType = MethodType.ONEWAY;
+						break;
+					default:
+						methodType = MethodType.UPDATE;
+						break;
+					}
+				}
+			}
+
+			if (method.isAnnotationPresent(Name.class)) {
+				Name nameAnnotation = method.getAnnotation(Name.class);
+				methodName = nameAnnotation.value();
+			}
+
+			Parameter[] parameters = method.getParameters();
+
+			ArrayList<IDLValue> candidArgs = new ArrayList<IDLValue>();
+
+			if (args != null)
+				for (int i = 0; i < args.length; i++) {
+					Object arg = args[i];
+					Argument argumentAnnotation = null;
+
+					boolean skip = false;
+
+					ObjectSerializer objectSerializer = new PojoSerializer();
+
+					for (Annotation annotation : method.getParameterAnnotations()[i]) {
+						if (Ignore.class.isInstance(annotation)) {
+							skip = true;
+							continue;
+						}
+						if (Argument.class.isInstance(annotation))
+							argumentAnnotation = (Argument) annotation;
+						if (org.ic4j.candid.annotations.Serializer.class.isInstance(annotation)) {
+							Class<ObjectSerializer> serializerClass = (Class<ObjectSerializer>) ((org.ic4j.candid.annotations.Serializer) annotation)
+									.value();
+							try {
+								objectSerializer = serializerClass.getConstructor().newInstance();
+							} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
+									| InvocationTargetException | NoSuchMethodException | SecurityException e) {
+								throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+							}
+						}
+					}
+
+					if (skip)
+						continue;
+
+					{
+						if (argumentAnnotation != null) {
+							Type type = argumentAnnotation.value();
+
+							IDLType idlType;
+
+							if (parameters[i].getType().isArray())
+								idlType = IDLType.createType(Type.VEC, IDLType.createType(type));
+							else
+								idlType = IDLType.createType(type);
+
+							IDLValue idlValue = IDLValue.create(arg, objectSerializer, idlType);
+
+							candidArgs.add(idlValue);
+						} else
+							candidArgs.add(IDLValue.create(arg, objectSerializer));
+					}
 				}
 
-				Parameter[] parameters = method.getParameters();
+			IDLArgs idlArgs = IDLArgs.create(candidArgs);
 
-				ArrayList<IDLValue> candidArgs = new ArrayList<IDLValue>();
+			byte[] buf = idlArgs.toBytes();
 
-				if (args != null)
-					for (int i = 0; i < args.length; i++) {
-						Object arg = args[i];
-						Argument argumentAnnotation = null;
+			ObjectDeserializer objectDeserializer;
 
-						boolean skip = false;
+			if (method.isAnnotationPresent(org.ic4j.candid.annotations.Deserializer.class)) {
+				Class<ObjectDeserializer> deserializerClass = (Class<ObjectDeserializer>) method
+						.getAnnotation(org.ic4j.candid.annotations.Deserializer.class).value();
+				try {
+					objectDeserializer = deserializerClass.getConstructor().newInstance();
+				} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
+						| InvocationTargetException | NoSuchMethodException | SecurityException e) {
+					throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+				}
+			} else
+				objectDeserializer = new PojoDeserializer();
+			switch (methodType) {
+			case QUERY: {
+				QueryBuilder queryBuilder = QueryBuilder.create(agent, this.canisterId, methodName);
 
-						ObjectSerializer objectSerializer = new PojoSerializer();
+				queryBuilder.effectiveCanisterId = this.effectiveCanisterId;
+				queryBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
 
-						for (Annotation annotation : method.getParameterAnnotations()[i]) {
-							if (Ignore.class.isInstance(annotation)) {
-								skip = true;
-								continue;
-							}
-							if (Argument.class.isInstance(annotation))
-								argumentAnnotation = (Argument) annotation;
-							if (org.ic4j.candid.annotations.Serializer.class.isInstance(annotation)) {
-								Class<ObjectSerializer> serializerClass = (Class<ObjectSerializer>) ((org.ic4j.candid.annotations.Serializer) annotation)
-										.value();
-								try {
-									objectSerializer = serializerClass.getConstructor().newInstance();
-								} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
-										| InvocationTargetException | NoSuchMethodException | SecurityException e) {
-									throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e);
-								}
-							}
-						}
+				CompletableFuture<Response<byte[]>> builderResponse = queryBuilder.arg(buf).call(null);
 
-						if (skip)
-							continue;
+				try {
+					if (method.getReturnType().equals(CompletableFuture.class)) {
+						CompletableFuture<Object> response = new CompletableFuture();
 
-						{
-							if (argumentAnnotation != null) {
-								Type type = argumentAnnotation.value();
+						builderResponse.whenComplete((input, ex) -> {
+							if (ex == null) {
+								if (input != null) {
+									IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
 
-								IDLType idlType;
+									if (outArgs.getArgs().isEmpty())
+										response.completeExceptionally(AgentError.create(
+												AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+									else {
+										Class<?> responseClass = getMethodClass(method);
 
-								if (parameters[i].getType().isArray())
-									idlType = IDLType.createType(Type.VEC, IDLType.createType(type));
-								else
-									idlType = IDLType.createType(type);
-
-								IDLValue idlValue = IDLValue.create(arg, objectSerializer, idlType);
-
-								candidArgs.add(idlValue);
+										if (responseClass != null) {
+											if (responseClass.isAssignableFrom(IDLArgs.class))
+												response.complete(outArgs);
+											else if (responseClass.isAssignableFrom(Response.class))
+												response.complete(input);
+											else
+												response.complete(outArgs.getArgs().get(0).getValue(objectDeserializer,
+														responseClass));
+										} else
+											response.complete(outArgs.getArgs().get(0).getValue());
+									}
+								} else
+									response.completeExceptionally(AgentError
+											.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
 							} else
-								candidArgs.add(IDLValue.create(arg, objectSerializer));
-						}
+								response.completeExceptionally(ex);
+						});
+						return response;
+					} else {
+						if (method.getReturnType().equals(Response.class))
+							return builderResponse.get();
+
+						byte[] output = builderResponse.get().getPayload();
+
+						IDLArgs outArgs = IDLArgs.fromBytes(output);
+
+						if (method.getReturnType().equals(IDLArgs.class))
+							return outArgs;
+
+						if (outArgs.getArgs().isEmpty())
+							throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value");
+
+						return outArgs.getArgs().get(0).getValue(objectDeserializer, method.getReturnType());
 					}
 
-				IDLArgs idlArgs = IDLArgs.create(candidArgs);
+				} catch (AgentError e) {
+					throw e;
+				} catch (Exception e) {
+					throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
+				}
+			}
+			case ONEWAY:
+			case UPDATE: {
+				boolean disableRangeCheck = false;
+				UPDATE updateMethod = method.getAnnotation(UPDATE.class);
 
-				byte[] buf = idlArgs.toBytes();
+				if (updateMethod != null) {
+					disableRangeCheck = updateMethod.disableRangeCheck();
+				}
 
-				ObjectDeserializer objectDeserializer;
+				UpdateBuilder updateBuilder = UpdateBuilder.create(this.agent, this.canisterId, methodName);
 
-				if (method.isAnnotationPresent(org.ic4j.candid.annotations.Deserializer.class)) {
-					Class<ObjectDeserializer> serializerClass = (Class<ObjectDeserializer>) method
-							.getAnnotation(org.ic4j.candid.annotations.Deserializer.class).value();
-					try {
-						objectDeserializer = serializerClass.getConstructor().newInstance();
-					} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
-							| InvocationTargetException | NoSuchMethodException | SecurityException e) {
-						throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e);
-					}
-				} else
-					objectDeserializer = new PojoDeserializer();
-				switch (methodType) {
-				case QUERY: {
-					QueryBuilder queryBuilder = QueryBuilder.create(agent, this.canisterId, methodName);
+				updateBuilder.effectiveCanisterId = this.effectiveCanisterId;
+				updateBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
 
-					queryBuilder.effectiveCanisterId = this.effectiveCanisterId;
-					queryBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
+				CompletableFuture<Object> response = new CompletableFuture<Object>();
 
-					CompletableFuture<Response<byte[]>> builderResponse = queryBuilder.arg(buf).call(null);
+				CompletableFuture<Response<RequestId>> requestResponse = updateBuilder.arg(buf).call(null);
 
-					try {
-						if (method.getReturnType().equals(CompletableFuture.class)) {
-							CompletableFuture<Object> response = new CompletableFuture();
+				if (methodType == MethodType.ONEWAY) {
+					response.complete(null);
 
-							builderResponse.whenComplete((input, ex) -> {
-								if (ex == null) {
-									if (input != null) {
-										IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
+					return response;
+				}
 
-										if (outArgs.getArgs().isEmpty())
+				RequestId requestId;
+				try {
+					requestId = requestResponse.get().getPayload();
+				} catch (ExecutionException e) {
+					if (e.getCause() != null && e.getCause() instanceof AgentError)
+						throw (AgentError) e.getCause();
+					else
+						throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
+				} catch (InterruptedException e) {
+					throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
+				}
+
+				Waiter waiter = this.waiter;
+
+				if (waiter == null) {
+					if (method.isAnnotationPresent(org.ic4j.agent.annotations.Waiter.class)) {
+						org.ic4j.agent.annotations.Waiter waiterAnnotation = method
+								.getAnnotation(org.ic4j.agent.annotations.Waiter.class);
+						waiter = Waiter.create(waiterAnnotation.timeout(), waiterAnnotation.sleep());
+					} else
+						waiter = Waiter.create(WAITER_TIMEOUT, WAITER_SLEEP);
+				}
+
+				CompletableFuture<Response<byte[]>> builderResponse = updateBuilder.getState(requestId, null,
+						disableRangeCheck, waiter);
+
+				builderResponse.whenComplete((input, ex) -> {
+					if (ex == null) {
+						if (input != null) {
+							IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
+
+							if (outArgs.getArgs().isEmpty()) {
+								if (method.getReturnType().equals(Void.TYPE))
+									response.complete(null);
+								else {
+									Class<?> responseClass = getMethodClass(method);
+
+									if (responseClass != null) {
+										if (responseClass.isAssignableFrom(Void.class))
+											response.complete(null);
+										else
 											response.completeExceptionally(AgentError.create(
 													AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
-										else {
-											Class<?> responseClass = getMethodClass(method);
-
-											if (responseClass != null) {
-												if (responseClass.isAssignableFrom(IDLArgs.class))
-													response.complete(outArgs);
-												else if (responseClass.isAssignableFrom(Response.class))
-													response.complete(input);
-												else
-													response.complete(outArgs.getArgs().get(0)
-															.getValue(objectDeserializer, responseClass));
-											} else
-												response.complete(outArgs.getArgs().get(0).getValue());
-										}
 									} else
 										response.completeExceptionally(AgentError.create(
 												AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+								}
+							} else {
+								Class<?> responseClass = getMethodClass(method);
+
+								if (responseClass != null) {
+									if (responseClass.isAssignableFrom(IDLArgs.class))
+										response.complete(outArgs);
+									else if (responseClass.isAssignableFrom(Response.class))
+										response.complete(input);
+									else
+										response.complete(
+												outArgs.getArgs().get(0).getValue(objectDeserializer, responseClass));
 								} else
-									response.completeExceptionally(ex);
-							});
-							return response;
-						} else {
-							if (method.getReturnType().equals(Response.class))
-								return builderResponse.get();
+									response.complete(outArgs.getArgs().get(0).getValue());
+							}
+						} else if (method.getReturnType().equals(Void.TYPE))
+							response.complete(null);
+						else {
+							Class<?> responseClass = getMethodClass(method);
 
-							byte[] output = builderResponse.get().getPayload();
-
-							IDLArgs outArgs = IDLArgs.fromBytes(output);
-
-							if (method.getReturnType().equals(IDLArgs.class))
-								return outArgs;
-
-							if (outArgs.getArgs().isEmpty())
-								throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value");
-
-							return outArgs.getArgs().get(0).getValue(objectDeserializer, method.getReturnType());
+							if (responseClass != null) {
+								if (responseClass.isAssignableFrom(Void.class))
+									response.complete(null);
+								else
+									response.completeExceptionally(AgentError
+											.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+							} else
+								response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,
+										"Missing return value"));
 						}
+					} else {
+						if (ex instanceof AgentError)
+							response.completeExceptionally(ex);
+						else
+							response.completeExceptionally(
+									AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, ex));
+					}
 
-					}
-					catch (AgentError e) {
-						throw e;
-					}
-					catch (Exception e) {
-						throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
-					}
+				});
+				return response;
+			}
+			default:
+				throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Invalid Candid method type");
+			}
+		}
+
+	}
+	
+	
+	
+	<T> T invoke(Func func, IDLType funcType,Class<T> responseClass, Mode[] modes, ObjectSerializer[] serializers, ObjectDeserializer deserializer, Object[] args) throws AgentError {
+		MethodType methodType = MethodType.UPDATE;
+
+		String methodName = func.getMethod();
+		
+		if(modes == null && funcType != null)
+			modes = funcType.modes.stream().toArray(Mode[]::new);
+
+		// the new way how to define operation type
+		if (modes != null) {
+
+			if (modes.length > 0) {
+				switch (modes[0]) {
+				case QUERY:
+					methodType = MethodType.QUERY;
+					break;
+				case ONEWAY:
+					methodType = MethodType.ONEWAY;
+					break;
+				default:
+					methodType = MethodType.UPDATE;
+					break;
 				}
-				case UPDATE: {
+			}
+		}
 
-					UPDATE updateMethod = method.getAnnotation(UPDATE.class);
+		ArrayList<IDLValue> candidArgs = new ArrayList<IDLValue>();
 
-					UpdateBuilder updateBuilder = UpdateBuilder.create(this.agent, this.canisterId, methodName);
+		if (args != null)	
+			for (int i = 0; i < args.length; i++) {
+				Object arg = args[i];
 
-					updateBuilder.effectiveCanisterId = this.effectiveCanisterId;
-					updateBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
+				ObjectSerializer objectSerializer = new PojoSerializer();
+				
+				if(serializers != null && serializers.length > i)
+					objectSerializer = serializers[i];			
 
-					CompletableFuture<Object> response = new CompletableFuture<Object>();
+				if(funcType != null && funcType.getArgs().size() > i){
+						IDLType idlType = funcType.getArgs().get(i);
+						
+						objectSerializer.setIDLType(idlType);
 
-					Waiter waiter = this.waiter;
+						IDLValue idlValue = IDLValue.create(arg, objectSerializer, idlType);
 
-					if (waiter == null) {
-						if (method.isAnnotationPresent(org.ic4j.agent.annotations.Waiter.class)) {
-							org.ic4j.agent.annotations.Waiter waiterAnnotation = method
-									.getAnnotation(org.ic4j.agent.annotations.Waiter.class);
-							waiter = Waiter.create(waiterAnnotation.timeout(), waiterAnnotation.sleep());
-						} else
-							waiter = Waiter.create(WAITER_TIMEOUT, WAITER_SLEEP);
-					}
+						candidArgs.add(idlValue);
+					} else
+						candidArgs.add(IDLValue.create(arg, objectSerializer));
+			}
 
-					CompletableFuture<Response<RequestId>> requestResponse = updateBuilder.arg(buf).call(null);
+		IDLArgs idlArgs = IDLArgs.create(candidArgs);
 
-					RequestId requestId;
-					try {
-						requestId = requestResponse.get().getPayload();
-					} catch (ExecutionException e) {
-						if(e.getCause() != null && e.getCause() instanceof AgentError)
-							throw (AgentError)e.getCause();
-						else	
-							throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
-					}
-					catch (InterruptedException e) {
-						throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
-					}					
-					
-					CompletableFuture<Response<byte[]>> builderResponse = updateBuilder.getState(
-							requestId, null, updateMethod.disableRangeCheck(), waiter);
+		byte[] buf = idlArgs.toBytes();
+
+		ObjectDeserializer objectDeserializer;
+
+		if (deserializer != null)
+				objectDeserializer = deserializer;
+		else
+			objectDeserializer = new PojoDeserializer();
+		
+		switch (methodType) {
+		case QUERY: {
+			QueryBuilder queryBuilder = QueryBuilder.create(agent, this.canisterId, methodName);
+
+			queryBuilder.effectiveCanisterId = this.effectiveCanisterId;
+			
+			if(queryBuilder.effectiveCanisterId == null)
+				queryBuilder.effectiveCanisterId = this.canisterId;
+			
+			queryBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
+
+			CompletableFuture<Response<byte[]>> builderResponse = queryBuilder.arg(buf).call(null);
+
+			try {			
+				if (responseClass != null && responseClass.equals(CompletableFuture.class)) {
+					CompletableFuture<Object> response = new CompletableFuture();
 
 					builderResponse.whenComplete((input, ex) -> {
 						if (ex == null) {
 							if (input != null) {
 								IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
 
-								if (outArgs.getArgs().isEmpty()) {
-									if (method.getReturnType().equals(Void.TYPE))
-										response.complete(null);
-									else {
-										Class<?> responseClass = getMethodClass(method);
-
-										if (responseClass != null) {
-											if (responseClass.isAssignableFrom(Void.class))
-												response.complete(null);
-											else
-												response.completeExceptionally(
-														AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,
-																"Missing return value"));
-										} else
-											response.completeExceptionally(AgentError.create(
-													AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
-									}
-								} else {
-									Class<?> responseClass = getMethodClass(method);
-
+								if (outArgs.getArgs().isEmpty())
+									response.completeExceptionally(AgentError.create(
+											AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+								else {
+										
 									if (responseClass != null) {
 										if (responseClass.isAssignableFrom(IDLArgs.class))
 											response.complete(outArgs);
 										else if (responseClass.isAssignableFrom(Response.class))
 											response.complete(input);
 										else
-											response.complete(outArgs.getArgs().get(0).getValue(objectDeserializer,
+										{
+											if(funcType != null && funcType.getRets().size() > 0) {
+												objectDeserializer.setIDLType(funcType.getRets().get(0));
+												response.complete(outArgs.getArgs().get(0).getValue(objectDeserializer,responseClass,
+														funcType.getRets().get(0)));												
+											}
+											else
+												response.complete(outArgs.getArgs().get(0).getValue(objectDeserializer,
 													responseClass));
-									} else
-										response.complete(outArgs.getArgs().get(0).getValue());
+										}
+									}										
 								}
-							} else if (method.getReturnType().equals(Void.TYPE))
-								response.complete(null);
-							else {
-								Class<?> responseClass = getMethodClass(method);
+							} else
+								response.completeExceptionally(AgentError
+										.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+						} else
+							response.completeExceptionally(ex);
+					});
+					return (T) response;
+				} else {
+					byte[] output = builderResponse.get().getPayload();
 
-								if (responseClass != null) {
-									if (responseClass.isAssignableFrom(Void.class))
-										response.complete(null);
-									else
+					IDLArgs outArgs = IDLArgs.fromBytes(output);
+					if (responseClass != null) {
+						if (responseClass.equals(Response.class))
+							return (T) builderResponse.get();
+
+						if (responseClass.equals(IDLArgs.class))
+							return (T) outArgs;
+	
+						if (outArgs.getArgs().isEmpty())
+							throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value");
+	
+						if(funcType != null && funcType.getRets().size() > 0){
+						
+							objectDeserializer.setIDLType(funcType.getRets().get(0));
+						
+							return outArgs.getArgs().get(0).getValue(objectDeserializer,responseClass,
+									funcType.getRets().get(0));
+						}
+						else
+							return outArgs.getArgs().get(0).getValue(objectDeserializer,
+									responseClass);
+					}else
+						if(funcType != null && funcType.getRets().size() > 0)
+							return outArgs.getArgs().get(0).getValue(funcType.getRets().get(0));
+						else	
+							return outArgs.getArgs().get(0).getValue();
+				}
+
+			} catch (AgentError e) {
+				throw e;
+			} catch (Exception e) {
+				throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
+			}
+		}
+		case ONEWAY:
+		case UPDATE: {
+			UpdateBuilder updateBuilder = UpdateBuilder.create(this.agent, this.canisterId, methodName);
+
+			updateBuilder.effectiveCanisterId = this.effectiveCanisterId;
+			
+			if(updateBuilder.effectiveCanisterId == null)
+				updateBuilder.effectiveCanisterId = this.canisterId;
+			
+			updateBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
+
+			CompletableFuture<Object> response = new CompletableFuture<Object>();
+
+			CompletableFuture<Response<RequestId>> requestResponse = updateBuilder.arg(buf).call(null);
+
+			if (methodType == MethodType.ONEWAY) {
+				response.complete(null);
+
+				return (T) response;
+			}
+
+			RequestId requestId;
+			try {
+				requestId = requestResponse.get().getPayload();
+			} catch (ExecutionException e) {
+				if (e.getCause() != null && e.getCause() instanceof AgentError)
+					throw (AgentError) e.getCause();
+				else
+					throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
+			} catch (InterruptedException e) {
+				throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e, e.getLocalizedMessage());
+			}
+
+			Waiter waiter = this.waiter;
+			boolean disableRangeCheck = this.disableRangeCheck;
+
+			if (waiter == null) 
+				waiter = Waiter.create(WAITER_TIMEOUT, WAITER_SLEEP);
+
+			CompletableFuture<Response<byte[]>> builderResponse = updateBuilder.getState(requestId, null,
+					this.disableRangeCheck, waiter);
+
+			if (responseClass != null && responseClass.equals(CompletableFuture.class)) {
+				builderResponse.whenComplete((input, ex) -> {
+					if (ex == null) {
+						if (input != null) {
+							IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
+	
+							if (outArgs.getArgs().isEmpty()) {
+								if (funcType != null && funcType.getRets().size() == 0)
+									response.complete(null);
+								else {
+	
+									if (responseClass != null) {
+										if (responseClass.isAssignableFrom(Void.class))
+											response.complete(null);
+										else
+											response.completeExceptionally(AgentError.create(
+													AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
+									} else
 										response.completeExceptionally(AgentError.create(
 												AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
-								} else
+								}
+							} else {
+								if (responseClass != null) {
+									if (responseClass.isAssignableFrom(IDLArgs.class))
+										response.complete(outArgs);
+									else if (responseClass.isAssignableFrom(Response.class))
+										response.complete(input);
+									else
+										if(funcType != null && funcType.getRets().size() > 0)
+											response.complete(outArgs.getArgs().get(0).getValue(objectDeserializer,responseClass,
+													funcType.getRets().get(0)));												
+										else
+											response.complete(outArgs.getArgs().get(0).getValue(objectDeserializer,
+												responseClass));
+								} else 
+									if(funcType != null && funcType.getRets().size() > 0)
+										response.complete(outArgs.getArgs().get(0).getValue(funcType.getRets().get(0)));
+									else	
+										response.complete(outArgs.getArgs().get(0).getValue());
+							}
+						} else if (funcType != null && funcType.getRets().size() == 0)
+							response.complete(null);
+						else {
+							if (responseClass != null) {
+								if (responseClass.isAssignableFrom(Void.class))
+									response.complete(null);
+								else
 									response.completeExceptionally(AgentError
 											.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
-							}
-						} else
-						{
-							if(ex instanceof AgentError)
-								response.completeExceptionally(ex);
-							else
-								response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,ex));						
+							} else
+								response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,
+										"Missing return value"));
 						}
-							
-					});
-					return response;
-				}
-				default:
-					throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Invalid Candid method type");
-				}
-			} else
-				throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Candid method type not defined");
-		}
+					} else {
+						if (ex instanceof AgentError)
+							response.completeExceptionally(ex);
+						else
+							response.completeExceptionally(
+									AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, ex));
+					}
+	
+				});
+				return (T) response;
+			} else {
+				try {
+					byte[] output = builderResponse.get(WAITER_TIMEOUT + 10, TimeUnit.SECONDS).getPayload();
 
+					IDLArgs outArgs = IDLArgs.fromBytes(output);
+					if (responseClass != null) {
+						if (responseClass.equals(Response.class))
+							return (T) builderResponse.get();
+	
+						if (responseClass.equals(IDLArgs.class))
+							return (T) outArgs;
+	
+						if (outArgs.getArgs().isEmpty())
+							throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value");
+	
+						if(funcType != null && funcType.getRets().size() > 0)
+							return outArgs.getArgs().get(0).getValue(objectDeserializer,responseClass,
+									funcType.getRets().get(0));
+						else
+							return outArgs.getArgs().get(0).getValue(objectDeserializer,
+									responseClass);
+					}else
+						if(funcType != null && funcType.getRets().size() > 0)
+							return outArgs.getArgs().get(0).getValue(funcType.getRets().get(0));
+						else	
+							return outArgs.getArgs().get(0).getValue();
+				} catch (InterruptedException | ExecutionException | TimeoutException e) {
+					throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+				}				
+			}
+		}
+		default:
+			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Invalid Candid method type");
+		}
+	}
+
+	
+	
+	void parseServiceType()
+	{
+		if(!this.loadIDL)
+			return;
+		
+		//get service type from cache
+		this.serviceType = this.serviceTypes.get(this.canisterId);
+		
+		if(this.serviceType != null)
+			return;
+		
+		Reader idlReader;
+		
+		if(this.idlFile != null)
+		{
+			try {
+				idlReader = Files.newBufferedReader(this.idlFile);
+			} catch (IOException e) {
+				throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Invalid Candid IDL file %s", idlFile.getFileName());
+			}
+		}
+		else
+		{	
+			if(this.canisterId == null)
+				throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing canister Id");
+			
+			if(this.agent == null)
+				throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing Agent");
+			
+			String serviceIDL = this.agent.getIDL(canisterId);
+			
+			
+			idlReader = new StringReader(serviceIDL);
+		}
+		
+		IDLParser idlParser = new IDLParser(idlReader);
+		idlParser.parse();
+		
+		Map<String,IDLType> serviceTypes = idlParser.getServices();
+		
+		if(!serviceTypes.isEmpty())
+			this.serviceType = serviceTypes.values().iterator().next();	
+		
+		this.serviceTypes.put(this.canisterId, this.serviceType);
 	}
 
 	static Class<?> getMethodClass(Method method) {

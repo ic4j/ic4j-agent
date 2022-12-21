@@ -75,13 +75,9 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 		client = new OkHttpClient.Builder().readTimeout(timeout, TimeUnit.SECONDS).build();
 	}
 
-
-
 	public static ReplicaTransport create(String url) throws URISyntaxException {
 		return new ReplicaOkHttpTransport(new URI(url));
 	}
-
-
 
 	public static ReplicaTransport create(String url,  int timeout)
 			throws URISyntaxException {
@@ -93,7 +89,6 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 		Request httpRequest = new Request.Builder().url(uri.toString() + ReplicaHttpProperties.API_VERSION_URL_PART + ReplicaHttpProperties.STATUS_URL_PART).get().addHeader(ReplicaHttpProperties.CONTENT_TYPE, ReplicaHttpProperties.DFINITY_CONTENT_TYPE).build();		
 
 		return this.execute(httpRequest);
-
 	}
 
 	public CompletableFuture<ReplicaResponse> query(Principal containerId, byte[] envelope, Map<String,String> headers) {
@@ -115,7 +110,6 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 		Request httpRequest =  builder.build();		
 		
 		return this.execute(httpRequest);
-
 	}
 
 	public CompletableFuture<ReplicaResponse> call(Principal containerId, byte[] envelope, RequestId requestId, Map<String,String> headers) {
@@ -138,7 +132,6 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 		Request httpRequest =  builder.build();
 		
 		return this.execute(httpRequest);
-
 	}
 
 	public CompletableFuture<ReplicaResponse> readState(Principal containerId, byte[] envelope, Map<String,String> headers) {
@@ -160,7 +153,6 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 		Request httpRequest =  builder.build();
 		
 		return this.execute(httpRequest);
-
 	}
 
 	CompletableFuture<ReplicaResponse> execute(Request httpRequest) throws AgentError {
@@ -204,9 +196,10 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 						replicaResponse.payload = bytes;
 
 						response.complete(replicaResponse);						
-					} catch (IOException e) {
+					} catch (Throwable t) {
+						LOG.debug(requestUri + "->" + t);
 						response.completeExceptionally(
-								AgentError.create(AgentError.AgentErrorCode.HTTP_ERROR, e, e.getLocalizedMessage()));
+								AgentError.create(AgentError.AgentErrorCode.HTTP_ERROR, t, t.getLocalizedMessage()));
 					}
 
 				}
@@ -217,8 +210,6 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 					response.completeExceptionally(
 							AgentError.create(AgentError.AgentErrorCode.HTTP_ERROR, ex, ex.getLocalizedMessage()));
 				}
-
-
 			});
 
 			return response;

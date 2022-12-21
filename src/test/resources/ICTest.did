@@ -1,0 +1,57 @@
+type Result = 
+ variant {
+   Err: text;
+   Ok: principal;
+ };
+type F4 = func () -> (text) query;
+type F3 = func (text) -> () oneway;
+type F2 = func (text, bool) -> () oneway;
+type F1 = func (text) -> (text);
+type F0 = func () -> ();
+type Entry = 
+ record {
+   bar: bool;
+   foo: int;
+ };
+type ComplexEntry = 
+ record {
+   bar: bool;
+   foo: int;
+   pojo: Entry;
+ };
+type ComplexArrayEntry = 
+ record {
+   bar: vec bool;
+   foo: vec int;
+   pojo: vec Entry;
+ };
+service : {
+  echoBool: (bool) -> (bool) query;
+  echoComplexArrayPojo: (ComplexArrayEntry) -> (ComplexArrayEntry) query;
+  echoComplexPojo: (ComplexEntry) -> (ComplexEntry) query;
+  echoComplexPojoVec: (vec ComplexEntry) -> (vec ComplexEntry) query;
+  echoFloat: (float64) -> (float64) query;
+  echoFunc0: (F0) -> (F0) query;
+  echoFunc1: (F1) -> (F1) query;
+  echoFunc2: (F2) -> (F2) query;
+  echoFunc3: (F3) -> (F3) query;
+  echoFunc4: (F4) -> (F4) query;
+  echoInt: (int) -> (int) query;
+  echoOption: (opt int) -> (opt int) query;
+  echoOptionPojo: (opt Entry) -> (opt Entry) query;
+  echoPojo: (Entry) -> (Entry) query;
+  echoPojoVec: (vec Entry) -> (vec Entry) query;
+  echoPrincipal: (principal) -> (principal) query;
+  echoRecord: (Entry) -> (Entry) query;
+  echoText: (text) -> (text) query;
+  echoVariant: (Result) -> (Result) query;
+  echoVec: (vec int) -> (vec int) query;
+  getComplexArrayPojo: () -> (ComplexArrayEntry) query;
+  getName: () -> (text) query;
+  greet: (text) -> (text);
+  peek: (text, int) -> (text) query;
+  subComplexPojo: (ComplexEntry) -> (Entry) query;
+  updateComplexPojo: (ComplexEntry) -> (ComplexEntry);
+  updatePojo: (Entry) -> (Entry);
+  void: (text) -> () oneway;
+}
