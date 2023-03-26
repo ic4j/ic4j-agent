@@ -1011,6 +1011,7 @@ public final class ProxyBuilder {
 			
 			String serviceIDL = this.agent.getIDL(canisterId);
 			
+			LOG.debug(serviceIDL);
 			
 			idlReader = new StringReader(serviceIDL);
 		}

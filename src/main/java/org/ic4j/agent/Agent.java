@@ -17,7 +17,7 @@
 package org.ic4j.agent;
 
 import java.io.IOException;
-import java.math.BigInteger;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -53,11 +53,14 @@ import org.miracl.core.BLS12381.BLS;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
+import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 public final class Agent {
@@ -885,6 +888,19 @@ public final class Agent {
 
 		return response;
 	}
+	
+	public static String cborToJson(byte[] input) throws IOException {
+		CBORFactory cborFactory = new CBORFactory();
+		CBORParser cborParser = cborFactory.createParser(input);
+		JsonFactory jsonFactory = new JsonFactory();
+		StringWriter stringWriter = new StringWriter();
+		JsonGenerator jsonGenerator = jsonFactory.createGenerator(stringWriter);
+	while (cborParser.nextToken() != null) {
+		jsonGenerator.copyCurrentEvent(cborParser);
+	}
+	jsonGenerator.flush();
+	return stringWriter.toString();
+}	
 	
 	
 	
