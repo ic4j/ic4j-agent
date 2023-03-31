@@ -352,9 +352,9 @@ public class ICTest {
 					//Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
 					//Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
 					//Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
-					Assertions.assertTrue(headers.containsKey("Content-Type"));
+					Assertions.assertTrue(headers.containsKey("content-type"));
 					
-					Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");								
+					Assertions.assertEquals(headers.get("content-type"),"application/cbor");								
 				} catch (Throwable ex) {
 					LOG.debug(ex.getLocalizedMessage(), ex);
 					Assertions.fail(ex.getLocalizedMessage());
@@ -455,9 +455,9 @@ public class ICTest {
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
-				Assertions.assertTrue(headers.containsKey("Content-Length"));
+				Assertions.assertTrue(headers.containsKey("content-length"));
 				
-				Assertions.assertEquals(headers.get("Content-Length"),"0");				
+				Assertions.assertEquals(headers.get("content-length"),"0");				
 
 				LOG.debug("Request Id:" + requestId.toHexString());
 
@@ -492,9 +492,9 @@ public class ICTest {
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
-				Assertions.assertTrue(headers.containsKey("Content-Type"));
+				Assertions.assertTrue(headers.containsKey("content-type"));
 				
-				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");				
+				Assertions.assertEquals(headers.get("content-type"),"application/cbor");				
 				
 				args = new ArrayList<IDLValue>();
 
@@ -537,9 +537,9 @@ public class ICTest {
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
-				Assertions.assertTrue(headers.containsKey("Content-Type"));
+				Assertions.assertTrue(headers.containsKey("content-type"));
 				
-				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");
+				Assertions.assertEquals(headers.get("content-type"),"application/cbor");
 
 				HelloProxy hello = ProxyBuilder.create(agent, Principal.fromString(TestProperties.IC_CANISTER_ID))
 						.getProxy(HelloProxy.class);
@@ -568,9 +568,9 @@ public class ICTest {
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
-				Assertions.assertTrue(headers.containsKey("Content-Type"));
+				Assertions.assertTrue(headers.containsKey("content-type"));
 				
-				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");
+				Assertions.assertEquals(headers.get("content-type"),"application/cbor");
 
 				BigInteger intValue = new BigInteger("10000");
 
@@ -649,9 +649,9 @@ public class ICTest {
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
 				//Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
-				Assertions.assertTrue(headers.containsKey("Content-Type"));
+				Assertions.assertTrue(headers.containsKey("content-type"));
 				
-				Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");	
+				Assertions.assertEquals(headers.get("content-type"),"application/cbor");	
 				
 				// test functions
 				

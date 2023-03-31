@@ -116,9 +116,9 @@ public class LoanTest {
 			//Assertions.assertTrue(headers.containsKey(Response.X_IC_CANISTER_ID_HEADER));
 			//Assertions.assertTrue(headers.containsKey(Response.X_IC_NODE_ID_HEADER));
 			//Assertions.assertTrue(headers.containsKey(Response.X_IC_SUBNET_ID_HEADER));
-			Assertions.assertTrue(headers.containsKey("Content-Type"));
+			Assertions.assertTrue(headers.containsKey("content-type"));
 			
-			Assertions.assertEquals(headers.get("Content-Type"),"application/cbor");			
+			Assertions.assertEquals(headers.get("content-type"),"application/cbor");			
 
 		} catch (Throwable ex) {
 			LOG.debug(ex.getLocalizedMessage(), ex);

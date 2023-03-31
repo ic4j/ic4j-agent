@@ -30,7 +30,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
-import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.ArrayUtils;
 import org.ic4j.agent.hashtree.Label;
@@ -67,6 +66,8 @@ public final class Agent {
 	static final byte[] IC_REQUEST_DOMAIN_SEPARATOR = "\nic-request".getBytes(StandardCharsets.UTF_8);
 	static final byte[] IC_STATE_ROOT_DOMAIN_SEPARATOR = "\ric-state-root".getBytes(StandardCharsets.UTF_8);
 	static final byte[] IC_ROOT_KEY;
+	static final String BLS_VERIFY_PROPERTY = "blsVerify";
+	static final boolean BLS_VERIFY;	
 
 	static final Integer DEFAULT_INGRESS_EXPIRY_DURATION = 300;
 	static final Integer DEFAULT_PERMITTED_DRIFT = 60;
@@ -83,36 +84,44 @@ public final class Agent {
 	
 	static {
 		try {
+			BLS_VERIFY = Boolean.parseBoolean(System.getProperty(BLS_VERIFY_PROPERTY, "true"));
 			IC_ROOT_KEY = Hex.decodeHex("308182301d060d2b0601040182dc7c0503010201060c2b0601040182dc7c05030201036100814c0e6ec71fab583b08bd81373c255c3c371b2e84863c98a4f1e08b74235d14fb5d9c0cd546d9685f913a0c0b2cc5341583bf4b4392e467db96d65b9bb4cb717112f8472e0d5a4d14505ffd7484b01291091c5f87b98883463f98091a0baaae".toCharArray());
-		} catch (DecoderException e) {
+		} catch (Exception e) {
 			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+		}
+		
+		if(BLS_VERIFY)
+		{
+			int verifyResponse = BLS.init();
+			
+			if (verifyResponse!=0)
+				throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_VERIFICATION_FAILED);
 		}
 	}
 
 	Agent(AgentBuilder builder) {
-		int verifyResponse = BLS.init();
 		
-		if (verifyResponse!=0)
-			throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_VERIFICATION_FAILED);
+		if(!BLS_VERIFY)
+			this.verify = false;
 		
 		this.transport = builder.config.transport.get();
 
 		if (builder.config.ingressExpiryDuration.isPresent())
-			ingressExpiryDuration = builder.config.ingressExpiryDuration.get();
+			this.ingressExpiryDuration = builder.config.ingressExpiryDuration.get();
 		else
-			ingressExpiryDuration = Duration.ofSeconds(DEFAULT_INGRESS_EXPIRY_DURATION);
+			this.ingressExpiryDuration = Duration.ofSeconds(DEFAULT_INGRESS_EXPIRY_DURATION);
 
 		this.identity = builder.config.identity;
 
 		this.nonceFactory = builder.config.nonceFactory;	
 
 		this.rootKey = Optional.of(IC_ROOT_KEY);
-
 	}
 	
 	public void setVerify(boolean verify)
 	{
-		this.verify = verify;
+		if(BLS_VERIFY)
+			this.verify = verify;
 	}
 
 	Long getExpiryDate() {
