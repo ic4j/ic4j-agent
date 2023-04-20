@@ -2,7 +2,7 @@
 Read complete documentation here <a href="https://docs.ic4j.com">
 https://docs.ic4j.com</a>.
 
-IC4J Agent for The Internet Computer is a set of native Java libraries to connect remotely to the Internet Computer applications. 
+IC4J Java open source libraries provide a range of tools and interfaces for Java developers to interact with the Internet Computer network and build decentralized applications on top of it.
 
 <a href="https://dfinity.org/">
 https://dfinity.org/
