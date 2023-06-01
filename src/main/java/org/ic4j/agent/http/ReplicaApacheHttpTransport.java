@@ -56,7 +56,7 @@ import org.slf4j.LoggerFactory;
 public class ReplicaApacheHttpTransport implements ReplicaTransport {
 	protected static final Logger LOG = LoggerFactory.getLogger(ReplicaApacheHttpTransport.class);
 
-	final IOReactorConfig ioReactorConfig;
+	IOReactorConfig ioReactorConfig;
 	final CloseableHttpAsyncClient client;
 
 	URI uri;
@@ -65,9 +65,9 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 	ReplicaApacheHttpTransport(URI url) {
 		this.uri = url;
 
-		ioReactorConfig = IOReactorConfig.custom().setSoTimeout(Timeout.ofSeconds(ReplicaHttpProperties.TIMEOUT)).build();
+		this.ioReactorConfig = IOReactorConfig.custom().setSoTimeout(Timeout.ofSeconds(ReplicaHttpProperties.TIMEOUT)).build();
 
-		client = HttpAsyncClients.custom().setIOReactorConfig(ioReactorConfig).build();
+		this.client = HttpAsyncClients.custom().setIOReactorConfig(ioReactorConfig).build();
 	}
 
 	ReplicaApacheHttpTransport(URI url, int maxTotal, int maxPerRoute, int connectionTimeToLive, int timeout) {
@@ -78,20 +78,25 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 				.setConnectionTimeToLive(TimeValue.ofSeconds(connectionTimeToLive)).setMaxConnTotal(maxTotal)
 				.setMaxConnPerRoute(maxPerRoute).build();
 
-		ioReactorConfig = IOReactorConfig.custom().setSoTimeout(Timeout.ofSeconds(timeout)).build();
+		this.ioReactorConfig = IOReactorConfig.custom().setSoTimeout(Timeout.ofSeconds(timeout)).build();
 
-		client = HttpAsyncClients.custom().setConnectionManager(connectionManager).setIOReactorConfig(ioReactorConfig)
+		this.client = HttpAsyncClients.custom().setConnectionManager(connectionManager).setIOReactorConfig(ioReactorConfig)
 				.build();
 	}
 
 	ReplicaApacheHttpTransport(URI url, AsyncClientConnectionManager connectionManager, int timeout) {
 		this.uri = url;
 
-		ioReactorConfig = IOReactorConfig.custom().setSoTimeout(Timeout.ofSeconds(timeout)).build();
+		this.ioReactorConfig = IOReactorConfig.custom().setSoTimeout(Timeout.ofSeconds(timeout)).build();
 
-		client = HttpAsyncClients.custom().setConnectionManager(connectionManager).setIOReactorConfig(ioReactorConfig)
+		this.client = HttpAsyncClients.custom().setConnectionManager(connectionManager).setIOReactorConfig(ioReactorConfig)
 				.build();
 	}
+	
+	ReplicaApacheHttpTransport(URI url, CloseableHttpAsyncClient client) {
+		this.uri = url;	
+		this.client = client;
+	}	
 
 	public static ReplicaTransport create(String url) throws URISyntaxException {
 		return new ReplicaApacheHttpTransport(new URI(url));
@@ -106,6 +111,11 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 			throws URISyntaxException {
 		return new ReplicaApacheHttpTransport(new URI(url), connectionManager, timeout);
 	}
+	
+	public static ReplicaTransport create(String url,CloseableHttpAsyncClient client)
+			throws URISyntaxException {
+		return new ReplicaApacheHttpTransport(new URI(url), client);
+	}	
 
 	public CompletableFuture<ReplicaResponse> status() {
 

@@ -22,8 +22,8 @@ import org.ic4j.candid.types.Type;
 import org.ic4j.types.Func;
 
 @Agent(identity = @Identity(type = IdentityType.BASIC, pem_file = "./src/test/resources/Ed25519_identity.pem"), transport = @Transport(url = "http://localhost:8001"))
-@Canister("ofoea-eyaaa-aaaab-qab6a-cai")
-@EffectiveCanister("ofoea-eyaaa-aaaab-qab6a-cai")
+@Canister("3qz6y-aiaaa-aaaab-qacna-cai")
+@EffectiveCanister("3qz6y-aiaaa-aaaab-qacna-cai")
 public interface HelloProxy {
 	
 	@Modes(Mode.QUERY)

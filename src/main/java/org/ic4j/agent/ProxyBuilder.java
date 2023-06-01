@@ -908,8 +908,12 @@ public final class ProxyBuilder {
 										response.complete(input);
 									else
 										if(funcType != null && funcType.getRets().size() > 0)
+										{
+											objectDeserializer.setIDLType(funcType.getRets().get(0));
+											
 											response.complete(outArgs.getArgs().get(0).getValue(objectDeserializer,responseClass,
-													funcType.getRets().get(0)));												
+													funcType.getRets().get(0)));	
+										}
 										else
 											response.complete(outArgs.getArgs().get(0).getValue(objectDeserializer,
 												responseClass));
