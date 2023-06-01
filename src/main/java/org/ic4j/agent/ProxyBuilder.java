@@ -962,8 +962,11 @@ public final class ProxyBuilder {
 							throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value");
 	
 						if(funcType != null && funcType.getRets().size() > 0)
+						{	
+							objectDeserializer.setIDLType(funcType.getRets().get(0));
 							return outArgs.getArgs().get(0).getValue(objectDeserializer,responseClass,
 									funcType.getRets().get(0));
+						}
 						else
 							return outArgs.getArgs().get(0).getValue(objectDeserializer,
 									responseClass);
