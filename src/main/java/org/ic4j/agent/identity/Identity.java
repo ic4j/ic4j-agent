@@ -21,5 +21,7 @@ import org.ic4j.types.Principal;
 public interface Identity {
 	public  Principal sender();
 	public  Signature sign(byte[] blob);
+	
+	public byte[] getPublicKey();
 
 }

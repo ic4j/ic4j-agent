@@ -171,5 +171,10 @@ public final class BasicIdentity implements Identity {
 		}
 
 	}
+	
+	public byte[] getPublicKey()
+	{
+		return this.derEncodedPublickey;
+	}
 
 }

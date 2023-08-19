@@ -13,7 +13,7 @@ plugins {
 
 
 group 'org.ic4j'
-version '0.6.19.3'
+version '0.6.19.5'
 
 sourceCompatibility = 1.8
 
@@ -52,7 +52,7 @@ test {
 }
 
 dependencies {
-	implementation group: 'org.ic4j', name: 'ic4j-candid', version: '0.6.19.2'
+	implementation group: 'org.ic4j', name: 'ic4j-candid', version: '0.6.19.5'
 	
 	// https://mvnrepository.com/artifact/commons-codec/commons-codec
 	implementation group: 'commons-codec', name: 'commons-codec', version: '1.15'

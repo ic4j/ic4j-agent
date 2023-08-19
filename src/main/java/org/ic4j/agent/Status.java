@@ -65,6 +65,12 @@ public class Status {
     */
 	@JsonProperty("replica_health_status")
     public Optional<String> replicaHealthStatus;	
+	
+    /**
+    * Optional. 
+    */
+	@JsonProperty("certified_height")
+    public Optional<Long>certifiedHeight;
 
     /**
     * Optional.  The root (public) key used to verify certificates.

@@ -29,5 +29,10 @@ public final class AnonymousIdentity implements Identity {
 	public Signature sign(byte[] msg) {
 		return new Signature();
 	}
+	
+	public byte[] getPublicKey()
+	{
+		return null;
+	}
 
 }

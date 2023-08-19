@@ -116,5 +116,10 @@ public final class Secp256k1Identity implements Identity {
 		}
 
 	}
+	
+	public byte[] getPublicKey()
+	{
+		return this.derEncodedPublickey;
+	}
 
 }

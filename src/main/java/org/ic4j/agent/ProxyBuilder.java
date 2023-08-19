@@ -957,6 +957,9 @@ public final class ProxyBuilder {
 	
 						if (responseClass.equals(IDLArgs.class))
 							return (T) outArgs;
+						
+						if (responseClass.isAssignableFrom(Void.class))
+							return (T)null;
 	
 						if (outArgs.getArgs().isEmpty())
 							throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value");
@@ -970,11 +973,16 @@ public final class ProxyBuilder {
 						else
 							return outArgs.getArgs().get(0).getValue(objectDeserializer,
 									responseClass);
-					}else
+					}else if(!outArgs.getArgs().isEmpty())
+					{
 						if(funcType != null && funcType.getRets().size() > 0)
 							return outArgs.getArgs().get(0).getValue(funcType.getRets().get(0));
-						else	
+						else 
 							return outArgs.getArgs().get(0).getValue();
+					}
+					else
+						return (T) null;
+					
 				} catch (InterruptedException | ExecutionException | TimeoutException e) {
 					throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
 				}				
