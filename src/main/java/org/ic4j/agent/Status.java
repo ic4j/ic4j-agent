@@ -27,7 +27,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 * The structure returned by [`ic_agent::Agent::status`], containing the information returned
 * by the status endpoint of a replica.
 */
-@JsonIgnoreProperties(value = { "impl_hash" })
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Status {
 	
 	/**

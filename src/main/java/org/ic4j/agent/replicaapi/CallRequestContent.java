@@ -22,11 +22,13 @@ import org.ic4j.agent.Serialize;
 import org.ic4j.agent.Serializer;
 import org.ic4j.types.Principal;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.fasterxml.jackson.databind.annotation.JsonAppend;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public final class CallRequestContent implements Serialize {
 
 	@JsonUnwrapped

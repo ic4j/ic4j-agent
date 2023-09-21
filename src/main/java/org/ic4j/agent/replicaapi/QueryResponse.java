@@ -21,11 +21,13 @@ import java.util.Optional;
 
 import org.ic4j.agent.AgentError;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.databind.JsonNode;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public final class QueryResponse extends Response{
 	static final String REJECTED_STATUS_VALUE = "rejected";
 	static final String REPLIED_STATUS_VALUE = "replied";
@@ -35,6 +37,7 @@ public final class QueryResponse extends Response{
 	public Optional<CallReply> replied;
 
 	public Optional<Rejected> rejected;
+	
 	
 	@JsonProperty("error_code")
 	@JsonInclude(JsonInclude.Include.NON_ABSENT)

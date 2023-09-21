@@ -13,7 +13,7 @@ plugins {
 
 
 group 'org.ic4j'
-version '0.6.19.5'
+version '0.6.19.6'
 
 sourceCompatibility = 1.8
 
@@ -94,6 +94,6 @@ dependencies {
 	testImplementation group: 'org.mock-server', name: 'mockserver-netty', version: '5.11.2'
 	
 	// https://mvnrepository.com/artifact/org.mock-server/mockserver-junit-rule
-	testImplementation group: 'org.mock-server', name: 'mockserver-junit-jupiter', version: '5.11.2'	
+	testImplementation group: 'org.mock-server', name: 'mockserver-junit-jupiter', version: '5.11.2'
 }
 
