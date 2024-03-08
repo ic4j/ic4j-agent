@@ -127,8 +127,7 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 
 	}
 
-	public CompletableFuture<ReplicaResponse> query(Principal containerId, byte[] envelope, Map<String,String> headers) {
-
+	public CompletableFuture<ReplicaResponse> query(Principal containerId, byte[] envelope, Map<String,String> headers) {		
 		HttpHost target = HttpHost.create(uri);
 		
 		SimpleHttpRequest httpRequest = new SimpleHttpRequest(Method.POST,target,ReplicaHttpProperties.API_VERSION_URL_PART + String.format(ReplicaHttpProperties.QUERY_URL_PART, containerId.toString()));

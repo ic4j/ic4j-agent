@@ -229,22 +229,13 @@ public final class Agent {
 	
 	public String getIDL(Principal canisterId) throws AgentError
 	{
-		List<IDLValue> args = new ArrayList<IDLValue>();
-
-		IDLArgs idlArgs = IDLArgs.create(args);
-
-		byte[] buf = idlArgs.toBytes();
-
-		CompletableFuture<byte[]> queryResponse = this.queryRaw(
-				canisterId,
-				canisterId, "__get_candid_interface_tmp_hack", buf, Optional.empty());
-
+	
 		try {
-			byte[] queryOutput = queryResponse.get();
-
-			IDLArgs outArgs = IDLArgs.fromBytes(queryOutput);
+			byte[] queryOutput = this.metadataRaw(canisterId, canisterId, "candid:service").get();
 			
-			return outArgs.getArgs().get(0).getValue();
+			String idl = new String(queryOutput, StandardCharsets.UTF_8);
+			
+			return idl;
 		}catch(AgentError e)
 		{
 			throw e;
@@ -672,6 +663,58 @@ public final class Agent {
 
 		return response;
 	}
+	
+	public CompletableFuture<byte[]> metadataRaw(Principal canisterId, Principal effectiveCanisterId, String name)
+			throws AgentError {
+		return this.metadataRaw(canisterId, effectiveCanisterId,name, false);
+	}
+	
+	public CompletableFuture<byte[]> metadataRaw(Principal canisterId, Principal effectiveCanisterId, String name, boolean disableRangeCheck)
+			throws AgentError {
+		List<List<byte[]>> paths = new ArrayList<List<byte[]>>();
+
+		List<byte[]> path = new ArrayList<byte[]>();
+		path.add("canister".getBytes());
+		path.add(canisterId.getValue());
+		path.add("metadata".getBytes());
+		path.add(name.getBytes());
+		paths.add(path);
+
+		CompletableFuture<byte[]> response = new CompletableFuture<byte[]>();
+
+		this.readStateRaw(effectiveCanisterId, paths,disableRangeCheck, null).whenComplete((input, ex) -> {
+			if (ex == null) {
+				if (input != null) {
+
+					try {
+						byte[] data = ResponseAuthentication.lookupMetadata(input.certificate,
+								canisterId, name);
+						response.complete(data);
+					} catch (AgentError e) {						
+						response.completeExceptionally(e);
+					}
+					catch (Exception e) {						
+						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e));
+					}					
+				} else {
+					response.completeExceptionally(
+							AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, input));
+				}
+			} else {
+				if(ex instanceof AgentError)
+				{			
+					AgentError e = (AgentError) ex;
+
+					response.completeExceptionally(e);
+				}
+				else
+					response.completeExceptionally(ex);
+			}
+		});
+
+		return response;
+	}
+	
 	
 	public CompletableFuture<CertificateResponse> readStateRaw(Principal effectiveCanisterId, List<List<byte[]>> paths, Map<String,String> headers)
 			throws AgentError {

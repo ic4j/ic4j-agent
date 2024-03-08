@@ -11,6 +11,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.Security;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -119,11 +120,40 @@ public class ICTest {
 				break;
 			}	
 
-			Agent agent = new AgentBuilder().transport(transport).identity(identity).nonceFactory(new NonceFactory())
+			Agent agent = new AgentBuilder().transport(transport).identity(identity).nonceFactory(new NonceFactory()).ingresExpiry(Duration.ofMinutes(4))
 					.build();
 			
+
+				List<IDLValue> args = new ArrayList<IDLValue>();
+
+				String stringValue = "x";
+
+				args.add(IDLValue.create(stringValue));
+
+				args.add(IDLValue.create(new BigInteger("1")));
+
+				IDLArgs idlArgs = IDLArgs.create(args);
+
+				byte[] buf = idlArgs.toBytes();
+
+				CompletableFuture<byte[]> queryResponse = agent.queryRaw(
+						Principal.fromString(TestProperties.IC_CANISTER_ID),
+						Principal.fromString(TestProperties.IC_CANISTER_ID), "peek", buf, Optional.empty());
+
+				try {
+					byte[] queryOutput = queryResponse.get();
+
+					IDLArgs outArgs = IDLArgs.fromBytes(queryOutput);
+
+					LOG.info(outArgs.getArgs().get(0).getValue());
+					Assertions.assertEquals("Hello, " + stringValue + "!", outArgs.getArgs().get(0).getValue());
+				} catch (Throwable ex) {
+					LOG.debug(ex.getLocalizedMessage(), ex);
+					Assertions.fail(ex.getLocalizedMessage());
+				}
+				
 			try {
-				String idlFile = agent.getIDL(Principal.fromString(TestProperties.IC_CANISTER_ID));
+				//String idlFile = agent.getIDL(Principal.fromString(TestProperties.IC_CANISTER_ID));
 				
 				Service service = new Service(Principal.fromString(TestProperties.IC_CANISTER_ID));
 				
@@ -157,11 +187,11 @@ public class ICTest {
 				
 				Pojo pojoValue = new Pojo();
 				
-				pojoValue.bar = new Boolean(false);
+				pojoValue.bar = Boolean.valueOf(false);
 				pojoValue.foo = BigInteger.valueOf(43); 
 				
 				ComplexPojo complexPojoValue = new ComplexPojo();
-				complexPojoValue.bar = new Boolean(true);
+				complexPojoValue.bar = Boolean.valueOf(true);
 				complexPojoValue.foo = BigInteger.valueOf(42);
 				
 				complexPojoValue.pojo = pojoValue;
@@ -222,19 +252,19 @@ public class ICTest {
 				
 				Assertions.assertEquals("Hello, Motoko!",peek);
 
-				List<IDLValue> args = new ArrayList<IDLValue>();
+				args = new ArrayList<IDLValue>();
 
-				String stringValue = "x";
+				stringValue = "x";
 
 				args.add(IDLValue.create(stringValue));
 
 				args.add(IDLValue.create(new BigInteger("1")));
 
-				IDLArgs idlArgs = IDLArgs.create(args);
+				//IDLArgs idlArgs = IDLArgs.create(args);
 
-				byte[] buf = idlArgs.toBytes();
+				buf = idlArgs.toBytes();
 
-				CompletableFuture<byte[]> queryResponse = agent.queryRaw(
+				 queryResponse = agent.queryRaw(
 						Principal.fromString(TestProperties.IC_CANISTER_ID),
 						Principal.fromString(TestProperties.IC_CANISTER_ID), "peek", buf, Optional.empty());
 				
@@ -294,7 +324,7 @@ public class ICTest {
 				// Record
 				Map<Label, Object> mapValue = new HashMap<Label, Object>();
 
-				mapValue.put(Label.createNamedLabel("bar"), new Boolean(true));
+				mapValue.put(Label.createNamedLabel("bar"), Boolean.valueOf(true));
 
 				mapValue.put(Label.createNamedLabel("foo"), BigInteger.valueOf(42));
 
@@ -585,11 +615,11 @@ public class ICTest {
 				
 				pojoValue = new Pojo();
 				
-				pojoValue.bar = new Boolean(false);
+				pojoValue.bar = Boolean.valueOf(false);
 				pojoValue.foo = BigInteger.valueOf(43); 
 				
 				complexPojoValue = new ComplexPojo();
-				complexPojoValue.bar = new Boolean(true);
+				complexPojoValue.bar = Boolean.valueOf(true);
 				complexPojoValue.foo = BigInteger.valueOf(42);	
 				
 				complexPojoValue.pojo = pojoValue;
@@ -613,7 +643,7 @@ public class ICTest {
 				Assertions.assertEquals(complexPojoValue,complexPojoResult);
 				
 				ComplexPojo complexPojoValue2 = new ComplexPojo();
-				complexPojoValue2.bar = new Boolean(true);
+				complexPojoValue2.bar = Boolean.valueOf(true);
 				complexPojoValue2.foo = BigInteger.valueOf(44);	
 				
 				complexPojoValue2.pojo = pojoValue;

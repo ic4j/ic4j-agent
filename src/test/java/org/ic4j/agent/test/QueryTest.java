@@ -166,7 +166,7 @@ public class QueryTest extends MockTest {
 
 			args = new ArrayList<IDLValue>();
 
-			args.add(IDLValue.create(new Boolean(true)));
+			args.add(IDLValue.create(Boolean.valueOf(true)));
 
 			idlArgs = IDLArgs.create(args);
 
@@ -191,7 +191,7 @@ public class QueryTest extends MockTest {
 
 			args = new ArrayList<IDLValue>();
 
-			Double doubleValue = new Double(42.42);
+			Double doubleValue = Double.valueOf(42.42);
 			args.add(IDLValue.create(doubleValue));
 
 			idlArgs = IDLArgs.create(args);
@@ -337,7 +337,7 @@ public class QueryTest extends MockTest {
 
 			Map<Label, Object> mapValue = new HashMap<Label, Object>();
 
-			mapValue.put(Label.createNamedLabel("bar"), new Boolean(true));
+			mapValue.put(Label.createNamedLabel("bar"), Boolean.valueOf(true));
 
 			mapValue.put(Label.createNamedLabel("foo"), BigInteger.valueOf(42));
 

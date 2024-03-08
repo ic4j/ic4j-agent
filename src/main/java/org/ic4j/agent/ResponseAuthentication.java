@@ -30,6 +30,7 @@ import org.ic4j.agent.replicaapi.CallReply;
 import org.ic4j.agent.replicaapi.Certificate;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.candid.Leb128;
+import org.ic4j.types.Principal;
 
 public final class ResponseAuthentication {
 	static final byte[] DER_PREFIX;
@@ -147,6 +148,19 @@ public final class ResponseAuthentication {
 		CallReply reply = new CallReply(replyData);
 		
 		return new RequestStatusResponse(reply);				
+	}
+	
+	static byte[] lookupMetadata(Certificate certificate, Principal canisterId, String name)
+	{
+		List<Label> path = new ArrayList<Label>();
+		path.add(new Label("canister"));			
+		path.add(new Label(canisterId.getValue()));
+		path.add(new Label("metadata"));
+		path.add(new Label(name));
+		
+		byte[] metadataData = lookupValue(certificate,path);	
+		
+		return metadataData;			
 	}	
 	
 	static byte[] lookupValue(Certificate certificate, List<Label> path)
