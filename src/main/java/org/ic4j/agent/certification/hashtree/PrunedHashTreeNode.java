@@ -14,8 +14,15 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.annotations;
+package org.ic4j.agent.certification.hashtree;
 
-public enum IdentityType {
-	ANONYMOUS,BASIC,SECP256K1,PRIME256V1,DELEGATED
+public final class PrunedHashTreeNode extends HashTreeNode {
+	byte[] digest;
+	
+	PrunedHashTreeNode(byte[] digest)
+	{
+		this.type = NodeType.PRUNED;
+		this.digest = digest;
+	}
+
 }

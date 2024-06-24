@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Exilor Inc.
+ * Copyright 2024 Exilor Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,27 +16,81 @@
 
 package org.ic4j.agent.replicaapi;
 
-import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.lang3.ArrayUtils;
+import org.ic4j.agent.AgentError;
+import org.ic4j.agent.Serialize;
+import org.ic4j.agent.Serializer;
+import org.ic4j.agent.requestid.RequestId;
+import org.ic4j.candid.annotations.Field;
+import org.ic4j.candid.annotations.Name;
+import org.ic4j.candid.types.Type;
+import org.ic4j.types.Principal;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonSetter;
-import com.fasterxml.jackson.databind.JsonNode;
 
-public final class Delegation {
+public final class Delegation implements Serialize{
+	static final byte[] IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR = "ic-request-auth-delegation".getBytes(StandardCharsets.UTF_8);
+	// The delegated-to key.
+    @Name("pubkey")
+    @Field(Type.NAT8)		
+	@JsonProperty("pubkey")
+	public byte[] pubKey;
+	
+	// A nanosecond timestamp after which this delegation is no longer valid.
+    @Name("expiration")
+    @Field(Type.NAT64)
+	@JsonProperty("expiration")
+	public long expiration;
+	
+	// If present, this delegation only applies to requests sent to one of these canisters.
+    @Name("targets")
+    @Field(Type.PRINCIPAL)
+	@JsonProperty("targets")
+	@JsonInclude(JsonInclude.Include.NON_ABSENT)
+	public List<Principal> targets;	
+	
+	
+    public Delegation() {
+		super();
+	}
+
+	public Delegation(long expiration,byte[] pubKey, List<Principal> targets) {
+		super();
+		this.pubKey = pubKey;
+		this.expiration = expiration;
+		this.targets = targets;
+	}
+
+	// Returns the signable form of the delegation, by running it through [`to_request_id`]
+    // and prepending `\x1Aic-request-auth-delegation` to the result.
+	public byte[] signable()
+	{
+		byte[] hash = RequestId.toRequestId(this).get();
 		
-	public byte[] subnetId;
-	
-	@JsonProperty("certificate")
-	public byte[] certificate;
-	
-	@JsonSetter("subnet_id")
-    void setSubnetId(JsonNode subnetIdNode) {
-		if (subnetIdNode != null && subnetIdNode.isBinary()) {
-			try {
-				this.subnetId = subnetIdNode.binaryValue();
-			} catch (IOException e) {
-
-			}
+		try {
+			;
+			byte[] separator = ArrayUtils.addAll(Hex.decodeHex("1A"),IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR);
+			byte[] bytes = ArrayUtils.addAll(separator,hash);
+			
+			return bytes;
+		} catch (DecoderException e) {
+			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
 		}
 	}
+
+	@Override
+	public void serialize(Serializer serializer) {
+		serializer.serializeField("pubkey", pubKey);
+		
+		if(targets != null)
+			serializer.serializeField("targets", targets);
+		
+	}
+
 }

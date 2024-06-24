@@ -16,20 +16,26 @@
 
 package org.ic4j.agent.identity;
 
+import java.util.List;
 import java.util.Optional;
+
+import org.ic4j.agent.replicaapi.SignedDelegation;
 
 public final class Signature {
 	public Optional<byte[]> publicKey;
 	public Optional<byte[]> signature;
 	
+	public Optional<List<SignedDelegation>> delegations;
+	
 	public Signature() {
 		
 	}
 	
-	public Signature(byte[] publicKey, byte[] signature)
+	public Signature(byte[] publicKey, byte[] signature, List<SignedDelegation> delegations)
 	{
 		this.publicKey = Optional.of(publicKey);
 		this.signature = Optional.of(signature);
+		this.delegations = Optional.ofNullable(delegations);
 	}
 
 }

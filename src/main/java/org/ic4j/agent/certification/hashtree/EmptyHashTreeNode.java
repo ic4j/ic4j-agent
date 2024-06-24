@@ -14,8 +14,13 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.annotations;
+package org.ic4j.agent.certification.hashtree;
 
-public enum IdentityType {
-	ANONYMOUS,BASIC,SECP256K1,PRIME256V1,DELEGATED
+public final class EmptyHashTreeNode extends HashTreeNode {
+	
+	EmptyHashTreeNode()
+	{
+		this.type = NodeType.EMPTY;
+	}
+
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent.certification.hashtree;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;

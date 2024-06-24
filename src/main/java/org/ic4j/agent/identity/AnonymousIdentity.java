@@ -18,7 +18,7 @@ package org.ic4j.agent.identity;
 
 import org.ic4j.types.Principal;
 
-public final class AnonymousIdentity implements Identity {
+public final class AnonymousIdentity extends Identity {
 	
 	@Override
 	public Principal sender() {
@@ -35,4 +35,8 @@ public final class AnonymousIdentity implements Identity {
 		return null;
 	}
 
+	@Override
+	public Signature signArbitrary(byte[] content) {
+		return new Signature();
+	}
 }

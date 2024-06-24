@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Exilor Inc.
+ * Copyright 2024 Exilor Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,27 +16,35 @@
 
 package org.ic4j.agent.replicaapi;
 
-import org.ic4j.agent.Serialize;
-import org.ic4j.agent.Serializer;
+import org.ic4j.candid.annotations.Field;
+import org.ic4j.candid.annotations.Name;
+import org.ic4j.candid.types.Type;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public final class CallReply extends Response implements Serialize {
-	@JsonProperty("arg")
-	public byte[] arg;
+public final class SignedDelegation {
 	
-	public CallReply()
-	{
-		
-	}
+
+	// The signed delegation.
+    @Name("delegation")
+    @Field(Type.RECORD)
+	@JsonProperty("delegation")
+	public Delegation delegation;
 	
-	public CallReply(byte[] arg)
-	{
-		this.arg = arg;
+	// The signature for the delegation.
+    @Name("signature")
+    @Field(Type.NAT8)
+	@JsonProperty("signature")
+	public byte[] signature;
+    
+	public SignedDelegation() {
+		super();
 	}
 
-	@Override
-	public void serialize(Serializer serializer) {
-		serializer.serializeField("arg", this.arg);	
+	public SignedDelegation(Delegation delegation, byte[] signature) {
+		super();
+		this.delegation = delegation;
+		this.signature = signature;
 	}
+
 }

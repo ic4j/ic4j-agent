@@ -15,19 +15,29 @@ import java.security.Security;
 import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.List;
+import java.util.Optional;
+import java.util.ArrayList;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.ic4j.agent.Agent;
 import org.ic4j.agent.AgentBuilder;
 import org.ic4j.agent.AgentError;
 import org.ic4j.agent.NonceFactory;
+import org.ic4j.agent.certification.Certificate;
 import org.ic4j.agent.http.ReplicaApacheHttpTransport;
 import org.ic4j.agent.identity.BasicIdentity;
+import org.ic4j.agent.identity.DelegatedIdentity;
 import org.ic4j.agent.identity.Identity;
+import org.ic4j.agent.identity.Prime256v1Identity;
 import org.ic4j.agent.identity.Secp256k1Identity;
 import org.ic4j.agent.identity.Signature;
-import org.ic4j.agent.replicaapi.Certificate;
+import org.ic4j.agent.replicaapi.CallReply;
+import org.ic4j.agent.replicaapi.Delegation;
+import org.ic4j.agent.replicaapi.QueryResponse;
 import org.ic4j.agent.replicaapi.ReadStateResponse;
+import org.ic4j.agent.replicaapi.SignedDelegation;
+import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.candid.ByteUtils;
 import org.ic4j.types.Principal;
 import org.junit.jupiter.api.Assertions;
@@ -50,9 +60,28 @@ public class IdentityTest {
 
 		KeyPair keyPair;
 		try {
-			keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+			keyPair = KeyPairGenerator.getInstance("Ed25519",BouncyCastleProvider.PROVIDER_NAME).generateKeyPair();
 
-			KeyFactory kf = KeyFactory.getInstance("Ed25519");
+			KeyFactory kf = KeyFactory.getInstance("Ed25519",BouncyCastleProvider.PROVIDER_NAME);
+			
+			QueryResponse queryResponse = new QueryResponse();
+			
+			queryResponse.status = QueryResponse.InnerStatus.REPLIED_STATUS;
+			
+			int[] replyArgs = {72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100};
+			
+			CallReply reply = new CallReply(ByteUtils.toSignedByteArray(replyArgs));
+			queryResponse.replied = Optional.of(reply);
+			
+			int[] requestIdArg = {124,19,121,143,179,72,73,19,11,253,97,170,134,64,188,231,15,14,129,67,129,180,66,34,200,88,232,17,155,33,8,43};
+			
+			RequestId requestId = RequestId.fromHex(ByteUtils.toSignedByteArray(requestIdArg));
+			
+			int[] signable = ByteUtils.toUnsignedIntegerArray(queryResponse.signable(requestId, 10000l));
+			
+			int[] signableResponse = {11, 105, 99, 45, 114, 101, 115, 112, 111, 110, 115, 101, 131, 237, 85, 191, 140, 184, 57, 31, 33, 253, 4, 137, 131, 4, 178, 142, 231, 129, 146, 244, 221, 152, 172, 157, 3, 97, 216, 73, 217, 58, 126, 227};
+			
+			Assertions.assertArrayEquals(signableResponse, signable);
 
 			Identity identity = BasicIdentity.fromKeyPair(keyPair);
 
@@ -68,7 +97,7 @@ public class IdentityTest {
 
 			boolean verifies = sig.verify(signature.signature.get());
 
-			LOG.debug(Boolean.toString(verifies));
+			LOG.debug("Anonymous " + Boolean.toString(verifies));
 
 			assert (verifies);
 
@@ -87,19 +116,23 @@ public class IdentityTest {
 
 			verifies = sig.verify(signature.signature.get());
 
-			LOG.debug(Boolean.toString(verifies));
+			LOG.debug("ED25519 Identity " + Boolean.toString(verifies));
 
 			assert (verifies);
 
 			path = Paths.get(getClass().getClassLoader().getResource(TestProperties.SECP256K1_IDENTITY_FILE).getPath());
 
 			identity = Secp256k1Identity.fromPEMFile(path);
+			
+			path = Paths.get(getClass().getClassLoader().getResource(TestProperties.SECP256K1_IDENTITY_PRIVATE_FILE).getPath());
+
+			identity = Secp256k1Identity.fromPEMFile(path);			
 
 			signature = identity.sign("Hello".getBytes());
 
-			sig = java.security.Signature.getInstance("SHA256withPLAIN-ECDSA", "BC");
+			sig = java.security.Signature.getInstance("SHA256withPLAIN-ECDSA", BouncyCastleProvider.PROVIDER_NAME);
 
-			kf = KeyFactory.getInstance("ECDSA", "BC");
+			kf = KeyFactory.getInstance("ECDSA", BouncyCastleProvider.PROVIDER_NAME);
 
 			publicKey = kf.generatePublic(new X509EncodedKeySpec(signature.publicKey.get()));
 
@@ -109,7 +142,55 @@ public class IdentityTest {
 
 			verifies = sig.verify(signature.signature.get());
 
-			LOG.debug(Boolean.toString(verifies));
+			LOG.debug("SECP256K1 Identity " + Boolean.toString(verifies));
+			
+			assert (verifies);	
+			
+			path = Paths.get(getClass().getClassLoader().getResource(TestProperties.PRIME256V1_IDENTITY_FILE).getPath());
+
+			identity = Prime256v1Identity.fromPEMFile(path);
+			
+			path = Paths.get(getClass().getClassLoader().getResource(TestProperties.PRIME256V1_IDENTITY_PRIVATE_FILE).getPath());
+
+			identity = Prime256v1Identity.fromPEMFile(path);	
+
+			signature = identity.sign("Hello".getBytes());
+
+			sig = java.security.Signature.getInstance("SHA512withECDSA", BouncyCastleProvider.PROVIDER_NAME);
+
+			kf = KeyFactory.getInstance("ECDSA", BouncyCastleProvider.PROVIDER_NAME);
+
+			publicKey = kf.generatePublic(new X509EncodedKeySpec(signature.publicKey.get()));
+
+			sig.initVerify(publicKey);
+
+			sig.update("Hello".getBytes());
+
+			verifies = sig.verify(signature.signature.get());
+
+			LOG.debug("PRIME256V1 Identity " + Boolean.toString(verifies));
+			
+			assert (verifies);		
+			
+			keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+
+			Identity sendingIdentity = BasicIdentity.fromKeyPair(keyPair);
+			
+			keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+
+			Identity signingIdentity = BasicIdentity.fromKeyPair(keyPair);	
+			
+			Delegation delegation = new Delegation(Long.MAX_VALUE, signingIdentity.getPublicKey(),null);
+			
+			signature = sendingIdentity.signDelegation(delegation);
+			
+			List<SignedDelegation> chain = new ArrayList<SignedDelegation>();
+			
+			SignedDelegation signedDelegation = new SignedDelegation(delegation,signature.signature.get());
+			
+			chain.add(signedDelegation);
+			
+			Identity delegatedIdentity = new DelegatedIdentity(signingIdentity , signature.publicKey.get(), chain);
 			
 			testBLS();
 

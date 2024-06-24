@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Exilor Inc.
+ * Copyright 2024 Exilor Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,10 +46,11 @@ import org.ic4j.types.Principal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class Secp256k1Identity extends Identity {
-	static final Logger LOG = LoggerFactory.getLogger(Secp256k1Identity.class);
+public final class Prime256v1Identity extends Identity {
+	static final Logger LOG = LoggerFactory.getLogger(Prime256v1Identity.class);
 
 	static JcaPEMKeyConverter jcaPemKeyConverter = new JcaPEMKeyConverter();
+	
 
 	KeyPair keyPair;
 	public byte[] derEncodedPublickey;
@@ -59,12 +60,12 @@ public final class Secp256k1Identity extends Identity {
 		jcaPemKeyConverter.setProvider(BouncyCastleProvider.PROVIDER_NAME);
 	}
 
-	Secp256k1Identity(KeyPair keyPair) {
+	Prime256v1Identity(KeyPair keyPair) {
 		this.keyPair = keyPair;
 		this.derEncodedPublickey = keyPair.getPublic().getEncoded();
 	}
 
-	public static Secp256k1Identity fromPEMFile(Reader reader) {
+	public static Prime256v1Identity fromPEMFile(Reader reader) {
 		try {
 
 			PEMParser pemParser = new PEMParser(reader);
@@ -72,15 +73,15 @@ public final class Secp256k1Identity extends Identity {
 			Object pemObject = pemParser.readObject();
 			
 			pemParser.close();
-
+			
 			if (pemObject instanceof PEMKeyPair) {
 				KeyPair keyPair = jcaPemKeyConverter.getKeyPair((PEMKeyPair) pemObject);
-
-				return new Secp256k1Identity(keyPair);
+				
+				return new Prime256v1Identity(keyPair);
 			}
 			else if(pemObject instanceof PrivateKeyInfo)
 		    {	    	
-		    	BCECPrivateKey privateKey = (BCECPrivateKey) jcaPemKeyConverter.getPrivateKey((PrivateKeyInfo) pemObject);    
+		    	BCECPrivateKey privateKey = (BCECPrivateKey) jcaPemKeyConverter.getPrivateKey((PrivateKeyInfo) pemObject);	    
 				
 				KeyFactory keyFactory = KeyFactory.getInstance("ECDSA", BouncyCastleProvider.PROVIDER_NAME);
 			    BigInteger d = privateKey.getD();
@@ -93,16 +94,18 @@ public final class Secp256k1Identity extends Identity {
 				PublicKey publicKey = keyFactory.generatePublic(pubSpec);	
 		    	
 		    	KeyPair keyPair = new KeyPair(publicKey, privateKey);
-		    	return new Secp256k1Identity(keyPair);
-		    }else
-				throw PemError.create(PemError.PemErrorCode.PEM_ERROR);
+		    	return new Prime256v1Identity(keyPair);
+		    }
+		    else
+		    	throw PemError.create(PemError.PemErrorCode.PEM_ERROR);			
+	
 
-		} catch (IOException | InvalidKeySpecException | NoSuchAlgorithmException | NoSuchProviderException e) {
+		} catch (IOException | NoSuchAlgorithmException | InvalidKeySpecException | NoSuchProviderException e) {
 			throw PemError.create(PemError.PemErrorCode.PEM_ERROR, e);
 		}
 	}
 	
-	public static Secp256k1Identity fromPEMFile(Path path) {
+	public static Prime256v1Identity fromPEMFile(Path path) {
 		try {
 			Reader reader = Files.newBufferedReader(path);
 			return fromPEMFile(reader);
@@ -111,9 +114,9 @@ public final class Secp256k1Identity extends Identity {
 		}
 	}
 
-	/// Create a Secp256k1Identity from a KeyPair
-	public static Secp256k1Identity fromKeyPair(KeyPair keyPair) {
-		return new Secp256k1Identity(keyPair);
+	/// Create a Prime256v1Identity from a KeyPair
+	public static Prime256v1Identity fromKeyPair(KeyPair keyPair) {
+		return new Prime256v1Identity(keyPair);
 	}
 
 	@Override
@@ -121,7 +124,6 @@ public final class Secp256k1Identity extends Identity {
 		return Principal.selfAuthenticating(derEncodedPublickey);
 	}
 
-	
 	@Override
 	public Signature sign(byte[] content) {
 		return this.signArbitrary(content);
@@ -130,14 +132,13 @@ public final class Secp256k1Identity extends Identity {
 	@Override
 	public Signature signDelegation(Delegation delegation) throws AgentError {
 		return this.signArbitrary(delegation.signable());
-	}
-
+	}	
 	@Override
 	public Signature signArbitrary(byte[] content) {
 		try {
 
 			// Generate new signature
-			java.security.Signature dsa = java.security.Signature.getInstance("SHA256withPLAIN-ECDSA", BouncyCastleProvider.PROVIDER_NAME);
+			java.security.Signature dsa = java.security.Signature.getInstance("SHA512withECDSA", BouncyCastleProvider.PROVIDER_NAME);
 			// ECDSA digital signature algorithm
 			dsa.initSign(this.keyPair.getPrivate());
 
@@ -151,7 +152,7 @@ public final class Secp256k1Identity extends Identity {
 			throw PemError.create(PemError.PemErrorCode.ERROR_STACK, e);
 		}
 
-	}	
+	}
 	
 	public byte[] getPublicKey()
 	{

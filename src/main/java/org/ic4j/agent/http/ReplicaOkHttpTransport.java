@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.Dispatcher;
 import okhttp3.Headers;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -222,8 +223,30 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 	
 	public void close()
 	{	
-		if(this.client != null) {
-			this.client.connectionPool().evictAll();
+        if(this.client == null)
+        	return;
+		// Get the dispatcher from the client
+        Dispatcher dispatcher = this.client.dispatcher();
+
+        // Shut down the dispatcher to stop accepting new calls
+        dispatcher.executorService().shutdown();
+
+        // Cancel any ongoing calls
+        for (Call call : dispatcher.queuedCalls()) {
+            call.cancel();
+        }
+        for (Call call : dispatcher.runningCalls()) {
+            call.cancel();
+        }
+
+        // Close the client to clean up resources
+        if(this.client.connectionPool() != null)
+        	this.client.connectionPool().evictAll();
+        try {
+        	if(this.client.cache() != null)
+        		this.client.cache().close();
+		} catch (IOException e) {
+			LOG.error(e.getLocalizedMessage(), e);
 		}
 	}
 

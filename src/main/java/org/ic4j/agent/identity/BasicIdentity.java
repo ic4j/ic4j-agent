@@ -24,6 +24,7 @@ import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Security;
@@ -39,27 +40,30 @@ import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.math.ec.rfc8032.Ed25519;
+import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+import org.ic4j.agent.AgentError;
+import org.ic4j.agent.replicaapi.Delegation;
 import org.ic4j.types.Principal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class BasicIdentity implements Identity {
+public final class BasicIdentity extends Identity {
 	static final Logger LOG = LoggerFactory.getLogger(BasicIdentity.class);
-    static JcaPEMKeyConverter pkcs8pemKeyConverter = new JcaPEMKeyConverter();
+    static JcaPEMKeyConverter jcaPemKeyConverter = new JcaPEMKeyConverter();
 	
 	KeyPair keyPair;
 	public byte[] derEncodedPublickey;
 
 	static {
 		Security.addProvider(new BouncyCastleProvider());
-		pkcs8pemKeyConverter.setProvider(BouncyCastleProvider.PROVIDER_NAME);
+		jcaPemKeyConverter.setProvider(BouncyCastleProvider.PROVIDER_NAME);
 	}
 
-	BasicIdentity(KeyPair keyPair, byte[] derEncodedPublickey) {
+	BasicIdentity(KeyPair keyPair) {
 		this.keyPair = keyPair;
-		this.derEncodedPublickey = derEncodedPublickey;
+		this.derEncodedPublickey = keyPair.getPublic().getEncoded();
 	}
 	
 	public static BasicIdentity fromPEMFile(Reader reader) {
@@ -68,12 +72,19 @@ public final class BasicIdentity implements Identity {
 			PEMParser pemParser = new PEMParser(reader);
 
 		    Object pemObject = pemParser.readObject();
-	        
-		    if(pemObject instanceof PrivateKeyInfo)
-		    {	    	
-		    	PrivateKey privateKey = pkcs8pemKeyConverter.getPrivateKey((PrivateKeyInfo) pemObject);
 		    
-				KeyFactory keyFactory = KeyFactory.getInstance("Ed25519"); 
+			pemParser.close();
+	        
+			if (pemObject instanceof PEMKeyPair) {
+				KeyPair keyPair = jcaPemKeyConverter.getKeyPair((PEMKeyPair) pemObject);
+
+				return new BasicIdentity(keyPair);
+			}
+			else if(pemObject instanceof PrivateKeyInfo)
+		    {	    	
+		    	PrivateKey privateKey = jcaPemKeyConverter.getPrivateKey((PrivateKeyInfo) pemObject);
+		    
+				KeyFactory keyFactory = KeyFactory.getInstance("Ed25519", BouncyCastleProvider.PROVIDER_NAME); 
 				
 				byte[] publicKeyBytes = ((PrivateKeyInfo) pemObject).getPublicKeyData().getBytes();
 				// Wrap public key in ASN.1 format so we can use X509EncodedKeySpec to read it
@@ -84,12 +95,12 @@ public final class BasicIdentity implements Identity {
 				PublicKey publicKey = keyFactory.generatePublic(x509KeySpec);			
 		    	
 		    	KeyPair keyPair = new KeyPair(publicKey, privateKey);
-		    	return new BasicIdentity(keyPair, publicKey.getEncoded());
+		    	return new BasicIdentity(keyPair);
 		    }
 		    else
 		    	throw PemError.create(PemError.PemErrorCode.PEM_ERROR);
 			
-		} catch (IOException | NoSuchAlgorithmException | InvalidKeySpecException e) {
+		} catch (IOException | NoSuchAlgorithmException | InvalidKeySpecException | NoSuchProviderException e) {
 			throw PemError.create(PemError.PemErrorCode.PEM_ERROR, e);
 		}
 	}	
@@ -143,9 +154,7 @@ public final class BasicIdentity implements Identity {
 
 	/// Create a BasicIdentity from a KeyPair
 	public static BasicIdentity fromKeyPair(KeyPair keyPair) {
-		PublicKey publicKey = keyPair.getPublic();
-
-		return new BasicIdentity(keyPair, publicKey.getEncoded());
+		return new BasicIdentity(keyPair);
 	}
 
 	@Override
@@ -154,24 +163,35 @@ public final class BasicIdentity implements Identity {
 	}
 
 	@Override
-	public Signature sign(byte[] msg) {
+	public Signature sign(byte[] content) {
+		return this.signArbitrary(content);
+	}
+	
+	@Override
+	public Signature signDelegation(Delegation delegation) throws AgentError {
+		return this.signArbitrary(delegation.signable());
+	}	
+	
+	@Override
+	public Signature signArbitrary(byte[] content) throws AgentError {
 		try {
 			// Generate new signature
 			java.security.Signature dsa;
 			dsa = java.security.Signature.getInstance("EdDSA");
 			// Edwards digital signature algorithm
 			dsa.initSign(this.keyPair.getPrivate());
-			dsa.update(msg, 0, msg.length);
+			dsa.update(content, 0, content.length);
 			byte[] signature = dsa.sign();
 
-			return new Signature(this.derEncodedPublickey, signature);
+			return new Signature(this.derEncodedPublickey, signature, null);
 
 		} catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
 			throw PemError.create(PemError.PemErrorCode.ERROR_STACK, e);
 		}
-
 	}
-	
+
+
+
 	public byte[] getPublicKey()
 	{
 		return this.derEncodedPublickey;

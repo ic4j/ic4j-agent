@@ -27,7 +27,9 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.commons.codec.digest.DigestUtils;
+import org.ic4j.agent.Serialize;
 import org.ic4j.agent.Serializer;
+import org.ic4j.candid.ByteUtils;
 import org.ic4j.candid.Leb128;
 import org.ic4j.types.Principal;
 import org.slf4j.Logger;
@@ -46,7 +48,6 @@ public final class RequestIdSerializer implements Serializer {
 		byte[] valueHash = this.hashValue(value);
 
 		fields.put(ByteBuffer.wrap(keyHash), valueHash);
-
 	}
 
 	/*
@@ -54,10 +55,15 @@ public final class RequestIdSerializer implements Serializer {
 	 */
 	<T> byte[] hashValue(T value) {
 		byte[] bytes;
+		
+		if(value instanceof Serialize)
+			return this.hashObject((Serialize)value);		
 		if (value instanceof List)
-			return this.hashList((List<?>) value);
+			return this.hashList((List<?>) value);		
 		if (value instanceof Long)
 			bytes = this.serializeLong((Long) value);
+		else if (value instanceof Number)
+			bytes = this.serializeLong(((Number) value).longValue());		
 		else if (value instanceof Principal)
 			bytes = ((Principal) value).getValue();
 		else if (value instanceof byte[])
@@ -65,7 +71,9 @@ public final class RequestIdSerializer implements Serializer {
 		else
 			bytes = value.toString().getBytes();
 
-		return DigestUtils.sha256(bytes);
+		byte[] result	=	DigestUtils.sha256(bytes);
+		
+		return result;
 	}
 
 	byte[] hashList(List<?> value) {
@@ -85,6 +93,13 @@ public final class RequestIdSerializer implements Serializer {
 					e.getLocalizedMessage());
 		}
 
+	}
+	
+	byte[] hashObject(Serialize value)
+	{
+		RequestId requestId = RequestId.toRequestId(value);
+		
+		return requestId.value;
 	}
 
 	byte[] serializeLong(Long value) {

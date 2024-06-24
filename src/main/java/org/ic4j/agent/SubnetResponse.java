@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Exilor Inc.
+ * Copyright 2024 Exilor Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,19 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent;
 
-public final class LeafHashTreeNode extends HashTreeNode {
-	byte[] value;
+import org.ic4j.types.Principal;
+
+public final class SubnetResponse {	
+	public Principal key;
+	public Subnet subnet;
 	
-	LeafHashTreeNode(byte[] value)
-	{
-		this.type = NodeType.LEAF;
-		this.value = value;
+	public SubnetResponse(Principal key, Subnet subnet) {
+		super();
+		this.key = key;
+		this.subnet = subnet;
 	}
 	
-	public byte[] getValue()
-	{
-		return this.value;
-	}
-
+	
 }

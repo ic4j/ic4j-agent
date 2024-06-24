@@ -52,6 +52,16 @@ public final class RequestId {
 		return serializer.finish();
 	}
 	
+	public static RequestId fromHex(byte[] value) 
+	{
+
+		if(value == null)
+			throw RequestIdError.create(RequestIdError.RequestIdErrorCode.EMPTY_SERIALIZER);
+			
+		return new RequestId(value);
+
+	}	
+	
 	public static RequestId fromHexString(String hexValue) 
 	{
 

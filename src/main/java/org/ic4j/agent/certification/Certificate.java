@@ -14,17 +14,25 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent.certification;
 
-public final class ForkHashTreeNode extends HashTreeNode {
-	HashTreeNode left;
-	HashTreeNode right;
+import java.util.Optional;
+
+import org.ic4j.agent.certification.hashtree.HashTree;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public final class Certificate {
 	
-	ForkHashTreeNode(HashTreeNode left, HashTreeNode right)
-	{
-		this.type = NodeType.FORK;
-		this.left = left;
-		this.right =right;
-	}
-
+	@JsonProperty("tree")
+	public HashTree tree;
+	
+	@JsonProperty("signature")
+	public byte[] signature;
+	
+	@JsonProperty("delegation")
+	@JsonInclude(JsonInclude.Include.NON_ABSENT)
+	public Optional<Delegation> delegation;
+	
 }

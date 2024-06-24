@@ -112,4 +112,30 @@ public final class QueryBuilder {
 		
 		return agent.queryRaw(this.canisterId, this.effectiveCanisterId, this.methodName, request, this.ingressExpiryDatetime);
 	}	
+	
+	/*
+    * Make a query call with signature verification. This will return a byte vector.
+    *
+    * Compared with [call][Self::call], this method will **always** verify the signature of the query response
+    * regardless the Agent level configuration from [AgentBuilder::with_verify_query_signatures].
+	*/
+	 
+	public CompletableFuture<byte[]> callWithVerification() throws AgentError
+	{
+		return agent.queryRaw(this.canisterId, this.effectiveCanisterId, this.methodName, this.arg, this.ingressExpiryDatetime, true);
+	}
+	
+	/*
+	 * Make a query call with signature verification. This will return AgentResponse with a byte vector and headers.
+	 * 
+     * Compared with [call][Self::call], this method will **always** verify the signature of the query response
+     * regardless the Agent level configuration from [AgentBuilder::with_verify_query_signatures].
+	 */
+	 
+	public CompletableFuture<Response<byte[]>> callWithVerification(Map<String, String> headers) throws AgentError
+	{
+		Request<byte[]> request = new Request<byte[]>(this.arg, headers);
+		
+		return agent.queryRaw(this.canisterId, this.effectiveCanisterId, this.methodName, request, this.ingressExpiryDatetime,true);
+	}	
 }

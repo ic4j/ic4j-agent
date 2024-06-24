@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Exilor Inc.
+ * Copyright 2024 Exilor Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,35 +14,33 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent.certification.hashtree;
 
 
-public final class LookupResult {
-	public LookupResultStatus status;
+public final class SubtreeLookupResult {
+	public SubtreeLookupResultStatus status;
 	
-	public byte[] value;
+	public HashTree value;
 	
-	LookupResult(LookupResultStatus status)
+	SubtreeLookupResult(SubtreeLookupResultStatus status)
 	{		
 		this.status = status;
 	}
 	
-	LookupResult(LookupResultStatus status, byte[] value)
+	SubtreeLookupResult(SubtreeLookupResultStatus status, HashTree value)
 	{		
 		this.status = status;
 		this.value = value;
 	}	
 	
-	public enum LookupResultStatus{
+	public enum SubtreeLookupResultStatus{
 		// The value is guaranteed to be absent in the original state tree.
 		ABSENT,
 		// This partial view does not include information about this path, and the original
 	    // tree may or may note include this value.
 		UNKNOWN,
-		// The value was found at the referenced node.
-		FOUND,
-		// The path does not make sense for this certificate.
-		ERROR
+		// The subtree was found at the provided path.
+		FOUND
 		;
 		
 	}

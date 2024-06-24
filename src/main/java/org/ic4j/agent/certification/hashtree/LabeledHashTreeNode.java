@@ -14,7 +14,7 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent.certification.hashtree;
 
 public final class LabeledHashTreeNode extends HashTreeNode {
 	Label label;

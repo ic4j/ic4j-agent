@@ -17,15 +17,25 @@
 package org.ic4j.agent.replicaapi;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.lang3.ArrayUtils;
 import org.ic4j.agent.AgentError;
+import org.ic4j.agent.requestid.RequestId;
+import org.ic4j.types.Principal;
+import org.ic4j.types.PrincipalError;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class QueryResponse extends Response{
@@ -38,10 +48,8 @@ public final class QueryResponse extends Response{
 
 	public Optional<Rejected> rejected;
 	
+	public List<NodeSignature> signatures;
 	
-	@JsonProperty("error_code")
-	@JsonInclude(JsonInclude.Include.NON_ABSENT)
-	public Optional<String> errorCode;
 	
     @JsonSetter("status")
     void setStatus(JsonNode statusNode) {
@@ -56,9 +64,7 @@ public final class QueryResponse extends Response{
             {
             	this.replied =  Optional.of(new CallReply());  
             	this.rejected = Optional.empty();
-            	this.status = InnerStatus.REPLIED_STATUS;
-            	
-            	
+            	this.status = InnerStatus.REPLIED_STATUS;       	
             }
         }
     }	
@@ -67,7 +73,7 @@ public final class QueryResponse extends Response{
     void setRejectCode(JsonNode rejectCodeNode) {
         if (rejectCodeNode != null && rejectCodeNode.isInt()) {
             if(this.rejected.isPresent())
-            	this.rejected.get().rejectCode = rejectCodeNode.asInt();
+            	this.rejected.get().rejectCode = RejectCode.create(rejectCodeNode.asInt());
             
         }
     }   
@@ -81,6 +87,14 @@ public final class QueryResponse extends Response{
         }
     } 
     
+    @JsonSetter("error_code")
+    void setErrorCode(JsonNode errorCodeNode) {
+        if (errorCodeNode != null && errorCodeNode.isTextual()) {
+            if(this.rejected.isPresent())
+            	this.rejected.get().errorCode = Optional.ofNullable(errorCodeNode.asText());          
+        }
+    }    
+    
     @JsonSetter("reply")
     void setReply(JsonNode replyNode) {
         if (replyNode != null && replyNode.has("arg")) {
@@ -93,14 +107,72 @@ public final class QueryResponse extends Response{
 				}
             
         }
-    }    
+    }  
+    
+    @JsonSetter("signatures")
+    void setSignatures(JsonNode signaturesNode) {   
+    	if (signaturesNode != null && signaturesNode.isArray())
+    	{
+    		ArrayNode arrayNode = (ArrayNode)signaturesNode;
+    		this.signatures = new ArrayList<NodeSignature>();
+    		
+    		Iterator<JsonNode> it = arrayNode.elements();
+    		
+    		while(it.hasNext())
+    		{
+    			NodeSignature nodeSignature = new NodeSignature();
+    			
+    			ObjectNode itemNode = (ObjectNode) it.next();
+    			
+    			if(itemNode.has("timestamp") && !itemNode.get("timestamp").isNull())
+    				nodeSignature.timestamp = itemNode.get("timestamp").asLong();
+    			
+    			if(itemNode.has("signature") && !itemNode.get("signature").isNull())
+    			{
+					try {
+						nodeSignature.signature = itemNode.get("signature").binaryValue();
+					} catch (IOException e) {
+						throw AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, e);
+					}
+    			}
+    			
+    			if(itemNode.has("identity") && !itemNode.get("identity").isNull())
+    			{
+					try {
+						nodeSignature.identity = Principal.from(itemNode.get("identity").binaryValue());
+					} catch (PrincipalError | IOException e) {
+						throw AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, e);
+					}
+    			}
+    			
+    			this.signatures.add(nodeSignature);
+    		}
+    	}
+    }
+    
+    public byte[] signable(RequestId requestId, long timestamp)
+    {
+    	QueryResponseSignable responseSignable = new QueryResponseSignable(this, requestId, timestamp);
+    		
+    	RequestId responseId = RequestId.toRequestId(responseSignable);
+    	try {
+    		byte[] prefix = ArrayUtils.addAll(Hex.decodeHex("0B"),"ic-response".getBytes(StandardCharsets.UTF_8));
+        	byte[] signable = ArrayUtils.addAll(prefix, responseId.get());
+        	
+        	return signable;
+		} catch (DecoderException e) {
+			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+		}
+
+    }
 
 	public final class Rejected{
-		public Integer rejectCode;
+		public RejectCode rejectCode;
 		public String rejectMessage;
+		public Optional<String> errorCode;
 	}
 	
-	enum InnerStatus{
+	public enum InnerStatus{
 		REJECTED_STATUS(REJECTED_STATUS_VALUE),
 		REPLIED_STATUS(REPLIED_STATUS_VALUE);
 		
@@ -111,4 +183,6 @@ public final class QueryResponse extends Response{
 		}
 
 	}
+	
+
 }

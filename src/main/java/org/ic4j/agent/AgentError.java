@@ -105,12 +105,19 @@ public final class AgentError extends Error {
 		INVALID_REQUEST_STATUS("InvalidRequestStatus"),
 		CERTIFICATE_VERIFICATION_FAILED("CertificateVerificationFailed"),
 		CERTIFICATE_NOT_AUTHORIZED("CertificateNotAuthorized"),
+		CERTIFICATE_OUTDATED("CertificateOutdated"),
 		DER_KEY_LENGTH_MISMATCH("DerKeyLengthMismatch"),
 		DER_PREFIX_MISMATCH("DerKeyLengthMismatch"),
 		NO_ROOT_KEY_IN_STATUS("NoRootKeyInStatus"),
 		COULD_NOT_READ_ROOT_KEY("CouldNotReadRootKey"),
 		MISSING_REPLICA_TRANSPORT("MissingReplicaTransport"),
-		TRANSPORT_ERROR("TransportError");
+		TRANSPORT_ERROR("TransportError"),
+		MISSING_SIGNATURE("MissingSignature"),
+		MALFORMED_SIGNATURE("MalformedSignature"),
+		MALFORMED_PUBLIC_KEY("MalformedSignature"),
+		TOO_MANY_SIGNATURES("TooManySignatures"),
+		QUERY_SIGNATURE_VERIFICATION_FAILED("QuerySignatureVerificationFailed")
+		;
 		
 		public String label;
 

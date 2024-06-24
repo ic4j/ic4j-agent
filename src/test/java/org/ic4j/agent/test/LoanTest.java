@@ -286,6 +286,8 @@ public class LoanTest {
 		
 		Assertions.assertArrayEquals(loanApplicationArray,loanApplicationListResult.toArray());
 		
+		agent.close();
+		
 	} catch (URISyntaxException e) {
 		LOG.error(e.getLocalizedMessage(), e);
 		Assertions.fail(e.getMessage());

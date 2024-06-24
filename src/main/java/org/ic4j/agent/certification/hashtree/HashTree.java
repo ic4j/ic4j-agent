@@ -14,8 +14,9 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent.certification.hashtree;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
@@ -42,5 +43,19 @@ public final class HashTree {
 	{
 		return this.rootNode.lookupPath(path);
 	}
+	
+    /// Given a (verified) tree, the client can fetch the subtree at a given path, which is a
+    /// sequence of labels (blobs).
+	public SubtreeLookupResult lookupSubtree(List<Label> path)
+	{
+		return this.rootNode.lookupSubtree(path);
+	}
+
+	public List<List<Label>> listPaths() {
+		
+		return this.rootNode.listPaths(new ArrayList<Label>());
+	}
+	
+	
 	
 }

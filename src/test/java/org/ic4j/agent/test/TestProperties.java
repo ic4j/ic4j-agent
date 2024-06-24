@@ -72,6 +72,10 @@ final class TestProperties extends Properties{
 	
 	protected static String ED25519_IDENTITY_FILE = "Ed25519_identity.pem";	
 	protected static String SECP256K1_IDENTITY_FILE = "Secp256k1_identity.pem";	
+	protected static String PRIME256V1_IDENTITY_FILE = "Prime256v1_identity.pem";	
+	
+	protected static String SECP256K1_IDENTITY_PRIVATE_FILE = "Secp256k1_identity_private.pem";	
+	protected static String PRIME256V1_IDENTITY_PRIVATE_FILE = "Prime256v1_identity_private.pem";	
 	
 	protected static  String TRANSPORT_TYPE = "http.apache";
 	

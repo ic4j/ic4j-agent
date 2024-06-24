@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Exilor Inc.
+ * Copyright 2024 Exilor Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,11 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.annotations;
+package org.ic4j.agent;
 
-public enum IdentityType {
-	ANONYMOUS,BASIC,SECP256K1,PRIME256V1,DELEGATED
+import org.ic4j.types.Principal;
+
+public final class PrincipalRange {
+	Principal low;
+	Principal high;		
 }

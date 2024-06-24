@@ -14,10 +14,11 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent.certification.hashtree;
 
 import java.io.IOException;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
@@ -201,7 +202,79 @@ public abstract class HashTreeNode {
 		throw new Error("Invalid Path " + path);
 	}
 	
-
+	/*
+    Lookup a subtree at the provided path.
+    If the tree definitely does not contain the label, this will return [SubtreeLookupResult::Absent].
+    If the tree has pruned sections that might contain the path, this will return [SubtreeLookupResult::Unknown].
+    If the provided path is found, this will return [SubtreeLookupResult::Found] with the node that was found at that path.
+    This assumes a sorted hash tree, which is what the spec says the system should return.
+    It will stop when it finds a label that's greater than the one being looked for.
+     */
+	public SubtreeLookupResult lookupSubtree(List<Label> path) {
+		
+		if(path == null || path.isEmpty())
+		{
+			switch(this.type)
+			{
+				case EMPTY: 
+					return new SubtreeLookupResult(SubtreeLookupResult.SubtreeLookupResultStatus.ABSENT);
+				default: 
+					return new SubtreeLookupResult(SubtreeLookupResult.SubtreeLookupResultStatus.FOUND, new HashTree(((HashTreeNode)this)));
+			}			
+		}
+		else
+		{
+			LookupLabelResult result = this.lookupLabel(path.get(0));
+			
+			switch(result.status)
+			{
+				case UNKNOWN: 
+					return new SubtreeLookupResult(SubtreeLookupResult.SubtreeLookupResultStatus.UNKNOWN);
+				case ABSENT:
+				case CONTINUE: 
+					if(Arrays.asList(NodeType.EMPTY, NodeType.LEAF).contains(this.type) )
+						return new SubtreeLookupResult(SubtreeLookupResult.SubtreeLookupResultStatus.UNKNOWN);
+					else
+						return new SubtreeLookupResult(SubtreeLookupResult.SubtreeLookupResultStatus.ABSENT);
+				case FOUND: 
+					path.remove(0);
+					return result.value.lookupSubtree(path);			
+			}
+		}
+		
+		throw new Error("Invalid Path " + path);
+	}
+	
+	List<List<Label>> listPaths(List<Label> path){
+		List<List<Label>> result = new ArrayList<List<Label>>();
+		switch(this.type) {
+			case FORK:
+				HashTreeNode leftNode = ((ForkHashTreeNode)this).left;
+				HashTreeNode rightNode = ((ForkHashTreeNode)this).right; 
+				List<List<Label>> leftPaths = leftNode.listPaths(path);
+				List<List<Label>> rightPaths = rightNode.listPaths(path);
+				result.addAll(leftPaths);
+				result.addAll(rightPaths);
+				break;
+			case LEAF:
+				List<Label> clonePath = new ArrayList<Label>(path);
+				result.add(clonePath);
+				break;
+			case LABELED:
+				HashTreeNode labeledNode = ((LabeledHashTreeNode)this).subtree;
+				clonePath = new ArrayList<Label>(path);
+				clonePath.add(((LabeledHashTreeNode)this).label);
+				
+				List<List<Label>> labeledPaths = labeledNode.listPaths(clonePath);
+				result.addAll(labeledPaths);
+				break;
+			case PRUNED:	
+			case EMPTY:
+				break;
+		}
+		
+		return result;
+	}
 	
     /*
 	Lookup a single label, returning a reference to the labeled [HashTreeNode] node if found.
@@ -295,6 +368,10 @@ public abstract class HashTreeNode {
 		// This partial view does not include information about this path, and the original
 	    // tree may or may note include this value.
 		UNKNOWN,
+		// The label was not found, but could still be to the left.
+		LESS,
+		// The label was not found, but could still be to the right.
+		GREATER,
 		// The label was not found, but could still be somewhere else.
 		CONTINUE,
 		// The value was found at the referenced node.

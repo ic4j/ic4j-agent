@@ -381,7 +381,7 @@ public class QueryTest extends MockTest {
 			} catch (Throwable ex) {
 				LOG.debug(ex.getLocalizedMessage(), ex);
 				Assertions.assertEquals(ex.getCause().getMessage(),
-						"The Replica returned an error: code 3, message: \"IC0302: Canister rrkah-fqaaa-aaaaa-aaaaq-cai has no query method 'hello'\"");
+						"The Replica returned an error: code DestinationInvalid, message: \"IC0302: Canister rrkah-fqaaa-aaaaa-aaaaq-cai has no query method 'hello'\"");
 
 			}
 

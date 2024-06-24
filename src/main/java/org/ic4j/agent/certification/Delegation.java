@@ -14,26 +14,29 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.replicaapi;
+package org.ic4j.agent.certification;
 
-import java.util.Optional;
+import java.io.IOException;
 
-import org.ic4j.agent.hashtree.HashTree;
-
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.databind.JsonNode;
 
-public final class Certificate {
+public final class Delegation {
+		
+	public byte[] subnetId;
 	
-	@JsonProperty("tree")
-	public HashTree tree;
+	@JsonProperty("certificate")
+	public byte[] certificate;
 	
-	@JsonProperty("signature")
-	public byte[] signature;
-	
-	@JsonProperty("delegation")
-	@JsonInclude(JsonInclude.Include.NON_ABSENT)
-	public Optional<Delegation> delegation;
-	
+	@JsonSetter("subnet_id")
+    void setSubnetId(JsonNode subnetIdNode) {
+		if (subnetIdNode != null && subnetIdNode.isBinary()) {
+			try {
+				this.subnetId = subnetIdNode.binaryValue();
+			} catch (IOException e) {
+
+			}
+		}
+	}
 }

@@ -53,11 +53,13 @@ import org.ic4j.agent.annotations.Transport;
 import org.ic4j.agent.annotations.QUERY;
 import org.ic4j.agent.annotations.ResponseClass;
 import org.ic4j.agent.annotations.UPDATE;
+import org.ic4j.agent.annotations.Verify;
 import org.ic4j.agent.http.ReplicaApacheHttpTransport;
 import org.ic4j.agent.identity.AnonymousIdentity;
 import org.ic4j.agent.identity.BasicIdentity;
 import org.ic4j.agent.identity.Identity;
 import org.ic4j.agent.identity.PemError;
+import org.ic4j.agent.identity.Prime256v1Identity;
 import org.ic4j.agent.identity.Secp256k1Identity;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.agent.annotations.Argument;
@@ -321,8 +323,13 @@ public final class ProxyBuilder {
 
 						identity = Secp256k1Identity.fromPEMFile(path);
 						break;
+						
+					case PRIME256V1:
+						path = Paths.get(identityAnnotation.pem_file());
 
-					}
+						identity = Prime256v1Identity.fromPEMFile(path);
+						break;					}
+					
 
 					agent = new AgentBuilder().transport(transport).identity(identity).build();
 					
@@ -402,8 +409,13 @@ public final class ProxyBuilder {
 			MethodType methodType = MethodType.UPDATE;
 
 			String methodName = method.getName();
+			
+			boolean verify = false;
+			
+			if (method.isAnnotationPresent(Verify.class))
+				verify = true;
 
-			if (method.isAnnotationPresent(QUERY.class))
+			if (method.isAnnotationPresent(QUERY.class))	
 				methodType = MethodType.QUERY;
 			else if (method.isAnnotationPresent(UPDATE.class))
 				methodType = MethodType.UPDATE;
@@ -510,7 +522,12 @@ public final class ProxyBuilder {
 				queryBuilder.effectiveCanisterId = this.effectiveCanisterId;
 				queryBuilder.ingressExpiryDatetime = this.ingressExpiryDatetime;
 
-				CompletableFuture<Response<byte[]>> builderResponse = queryBuilder.arg(buf).call(null);
+				CompletableFuture<Response<byte[]>> builderResponse;
+				
+				if(verify)
+					builderResponse = queryBuilder.arg(buf).callWithVerification(null);
+				else
+					builderResponse = queryBuilder.arg(buf).call(null);
 
 				try {
 					if (method.getReturnType().equals(CompletableFuture.class)) {

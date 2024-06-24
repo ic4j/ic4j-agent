@@ -19,7 +19,15 @@ package org.ic4j.agent;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.SignatureException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -27,26 +35,29 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.ArrayUtils;
-import org.ic4j.agent.hashtree.Label;
+import org.bouncycastle.asn1.edec.EdECObjectIdentifiers;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.ic4j.agent.certification.Certificate;
+import org.ic4j.agent.certification.Delegation;
+import org.ic4j.agent.certification.hashtree.Label;
 import org.ic4j.agent.identity.Identity;
 import org.ic4j.agent.identity.Signature;
 import org.ic4j.agent.replicaapi.CallRequestContent;
-import org.ic4j.agent.replicaapi.Certificate;
-import org.ic4j.agent.replicaapi.Delegation;
 import org.ic4j.agent.replicaapi.Envelope;
+import org.ic4j.agent.replicaapi.NodeSignature;
 import org.ic4j.agent.replicaapi.QueryContent;
 import org.ic4j.agent.replicaapi.QueryResponse;
 import org.ic4j.agent.replicaapi.ReadStateContent;
 import org.ic4j.agent.replicaapi.ReadStateResponse;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.candid.ByteUtils;
-import org.ic4j.candid.parser.IDLArgs;
-import org.ic4j.candid.parser.IDLValue;
 import org.ic4j.types.Principal;
 import org.miracl.core.BLS12381.BLS;
 import org.slf4j.Logger;
@@ -79,6 +90,8 @@ public final class Agent {
 	Identity identity;
 	NonceFactory nonceFactory;
 	Optional<byte[]> rootKey;
+	
+	static Map<Principal, Subnet> subnetCache = new WeakHashMap<Principal,Subnet>();
 	
 	boolean verify = true;
 	
@@ -249,6 +262,11 @@ public final class Agent {
 	
 	public CompletableFuture<Response<byte[]>> queryRaw(Principal canisterId, Principal effectiveCanisterId, String method, Request<byte[]> request
 			, Optional<Long> ingressExpiryDatetime) throws AgentError {
+		return this.queryRaw(canisterId, effectiveCanisterId, method, request, ingressExpiryDatetime, false);
+	}
+	
+	public CompletableFuture<Response<byte[]>> queryRaw(Principal canisterId, Principal effectiveCanisterId, String method, Request<byte[]> request
+			, Optional<Long> ingressExpiryDatetime, boolean explicitVerifyQuerySignatures) throws AgentError {
 		QueryContent queryContent = new QueryContent();
 
 		queryContent.queryRequest.methodName = method;
@@ -263,7 +281,7 @@ public final class Agent {
 
 		CompletableFuture<Response<byte[]>> response = new CompletableFuture<Response<byte[]>>();
 
-		this.queryEndpoint(effectiveCanisterId, queryContent, request.getHeaders()).whenComplete((input, ex) -> {
+		this.queryEndpoint(effectiveCanisterId, queryContent,explicitVerifyQuerySignatures, request.getHeaders()).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
 					if (input.replied.isPresent()) {
@@ -291,6 +309,12 @@ public final class Agent {
 
 	public CompletableFuture<byte[]> queryRaw(Principal canisterId, Principal effectiveCanisterId, String method,
 			byte[] arg, Optional<Long> ingressExpiryDatetime) throws AgentError {
+		
+		return this.queryRaw(canisterId, effectiveCanisterId, method, arg, ingressExpiryDatetime, false);		
+	}
+	
+	public CompletableFuture<byte[]> queryRaw(Principal canisterId, Principal effectiveCanisterId, String method,
+			byte[] arg, Optional<Long> ingressExpiryDatetime, boolean explicitVerifyQuerySignatures) throws AgentError {
 		QueryContent queryContent = new QueryContent();
 
 		queryContent.queryRequest.methodName = method;
@@ -305,10 +329,10 @@ public final class Agent {
 
 		CompletableFuture<byte[]> response = new CompletableFuture<byte[]>();
 
-		this.queryEndpoint(effectiveCanisterId, queryContent, null).whenComplete((input, ex) -> {
+		this.queryEndpoint(effectiveCanisterId, queryContent,explicitVerifyQuerySignatures, null).whenComplete((input, ex) -> {
 			if (ex == null) {
 				if (input != null) {
-					if (input.replied.isPresent()) {
+					if (input.replied.isPresent()) {	
 						byte[] out = input.replied.get().arg;
 						response.complete(out);
 					} else if (input.rejected.isPresent()) {
@@ -327,8 +351,87 @@ public final class Agent {
 		});
 		return response;
 	}
+	
+	public void verifySignatures(QueryResponse response, Principal effectiveCanisterId, RequestId requestId) throws AgentError {
+		if(response.signatures == null || response.signatures.isEmpty())
+			throw AgentError.create(AgentError.AgentErrorCode.MISSING_SIGNATURE);
+		
+		try {
+			Subnet subnet = this.getSubnet(effectiveCanisterId, effectiveCanisterId);
+			
+			if(response.signatures.size() > subnet.nodeKeys.size())
+				throw AgentError.create(AgentError.AgentErrorCode.TOO_MANY_SIGNATURES,response.signatures.size(),subnet.nodeKeys.size());
+			
+			
+			for(NodeSignature signature : response.signatures)
+			{
+				Instant instantNow = Instant.now();
+				Instant instantTimestamp = Instant.ofEpochMilli(signature.timestamp);
+				if(instantNow.toEpochMilli() - instantTimestamp.toEpochMilli()  > this.ingressExpiryDuration.getNano())
+					throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_OUTDATED,this.ingressExpiryDuration.getSeconds());
+				
+				byte[] signable = response.signable(requestId, signature.timestamp);
+				
+				byte[] nodeKey;
+				if(subnet.nodeKeys.containsKey(signature.identity))
+					nodeKey = subnet.nodeKeys.get(signature.identity);
+				else {
+					subnet = this.fetchSubnetByCanister(effectiveCanisterId, effectiveCanisterId);
+					
+					if(subnet.nodeKeys.containsKey(signature.identity))
+							nodeKey = subnet.nodeKeys.get(signature.identity);
+					else
+						throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED);
+				}
+				
+                if( nodeKey.length != 44) 
+                	throw AgentError.create(AgentError.AgentErrorCode.DER_KEY_LENGTH_MISMATCH,44,nodeKey.length);
+                
+                byte[] DER_PREFIX = {48, 42, 48, 5, 6, 3, 43, 101, 112, 3, 33, 0};
+                
+                byte[] prefix = ArrayUtils.subarray(nodeKey, 0, 12);
+                if(!Arrays.equals(prefix, DER_PREFIX))
+                	AgentError.create(AgentError.AgentErrorCode.DER_PREFIX_MISMATCH,DER_PREFIX,prefix);
+                
+                KeyFactory keyFactory = KeyFactory.getInstance("Ed25519");
+                
+                java.security.Signature sig = java.security.Signature.getInstance("EdDSA");
+                
+                byte[] key = ArrayUtils.subarray(nodeKey, 12, 44);
 
-	public CompletableFuture<QueryResponse> queryEndpoint(Principal effectiveCanisterId, QueryContent request, Map<String,String> headers)
+				try {
+					// Wrap public key in ASN.1 format so we can use X509EncodedKeySpec to read it
+					SubjectPublicKeyInfo pubKeyInfo = new SubjectPublicKeyInfo(
+							new AlgorithmIdentifier(EdECObjectIdentifiers.id_Ed25519), key);
+					X509EncodedKeySpec x509KeySpec = new X509EncodedKeySpec(pubKeyInfo.getEncoded());
+
+					PublicKey publicKey = keyFactory.generatePublic(x509KeySpec);
+
+					sig.initVerify(publicKey);
+
+					sig.update(signable);
+
+					boolean verifies = sig.verify(signature.signature);
+					
+					if(!verifies)
+						AgentError.create(AgentError.AgentErrorCode.QUERY_SIGNATURE_VERIFICATION_FAILED);
+						
+				} catch (SignatureException e) {
+					AgentError.create(AgentError.AgentErrorCode.MALFORMED_SIGNATURE);
+				} catch (InvalidKeyException e) {
+					AgentError.create(AgentError.AgentErrorCode.MALFORMED_PUBLIC_KEY);
+				} 
+			}
+			
+
+		} catch (IOException | InterruptedException | ExecutionException | NoSuchAlgorithmException | InvalidKeySpecException  e) {
+			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
+		}	
+		
+	}
+	
+
+	public CompletableFuture<QueryResponse> queryEndpoint(Principal effectiveCanisterId, QueryContent request,boolean explicitVerifyQuerySignatures, Map<String,String> headers)
 			throws AgentError {
 
 		RequestId requestId = RequestId.toRequestId(request);
@@ -362,8 +465,25 @@ public final class Agent {
 				if (input != null) {
 					try {
 						QueryResponse queryResponse = objectMapper.readValue(input.payload, QueryResponse.class);
-						queryResponse.headers = input.headers;
-						response.complete(queryResponse);
+						if(explicitVerifyQuerySignatures)
+						{
+							try
+							{
+								this.verifySignatures(queryResponse, effectiveCanisterId, requestId);
+
+								queryResponse.headers = input.headers;
+								response.complete(queryResponse);
+							}							
+							catch( AgentError e)
+							{
+								response.completeExceptionally(e);
+							}
+						}
+						else
+						{
+							queryResponse.headers = input.headers;
+							response.complete(queryResponse);
+						}
 					}
 					catch ( AgentError e) {
 						response.completeExceptionally(e);
@@ -715,6 +835,125 @@ public final class Agent {
 		return response;
 	}
 	
+	public CompletableFuture<Certificate> fetchCertificate(Principal canisterId, Principal effectiveCanisterId, String name)
+			throws AgentError {
+		return this.fetchCertificate(canisterId, effectiveCanisterId,name, false);
+	}
+	
+	public CompletableFuture<Certificate> fetchCertificate(Principal canisterId, Principal effectiveCanisterId, String name, boolean disableRangeCheck)
+			throws AgentError {
+		List<List<byte[]>> paths = new ArrayList<List<byte[]>>();
+
+		List<byte[]> path = new ArrayList<byte[]>();
+		path.add("canister".getBytes());
+		path.add(canisterId.getValue());
+		path.add(name.getBytes());
+		paths.add(path);
+
+		CompletableFuture<Certificate> response = new CompletableFuture<Certificate>();
+
+		this.readStateRaw(effectiveCanisterId, paths,disableRangeCheck, null).whenComplete((input, ex) -> {
+			if (ex == null) {
+				if (input != null) {
+
+					try {
+						response.complete(input.certificate);
+					} catch (AgentError e) {						
+						response.completeExceptionally(e);
+					}
+					catch (Exception e) {						
+						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e));
+					}					
+				} else {
+					response.completeExceptionally(
+							AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, input));
+				}
+			} else {
+				if(ex instanceof AgentError)
+				{			
+					AgentError e = (AgentError) ex;
+
+					response.completeExceptionally(e);
+				}
+				else
+					response.completeExceptionally(ex);
+			}
+		});
+
+		return response;
+	}	
+	
+	public Subnet getSubnet(Principal canisterId, Principal effectiveCanisterId) throws InterruptedException, ExecutionException, AgentError {
+		if(subnetCache.containsKey(canisterId))
+			return subnetCache.get(canisterId);
+		else
+		{
+
+			Subnet subnet = this.fetchSubnetByCanister(canisterId, effectiveCanisterId);
+			return subnet;
+		}
+	}
+	
+	public Subnet fetchSubnetByCanister(Principal canisterId, Principal effectiveCanisterId) throws InterruptedException, ExecutionException, AgentError {
+
+			Certificate certificate = this.fetchCertificate(canisterId, effectiveCanisterId, "controllers").get();
+			
+			Principal subnetId = getSubnetId(certificate, this.getRootKey());
+			Subnet subnet = this.fetchSubnet(subnetId, effectiveCanisterId).get().subnet;
+			subnetCache.put(canisterId, subnet);
+			
+			return subnet;
+	}	
+	
+	public CompletableFuture<SubnetResponse> fetchSubnet(Principal subnetId, Principal effectiveCanisterId)
+			throws AgentError {
+		return this.fetchSubnet(subnetId,effectiveCanisterId, false);
+	}
+	
+	public CompletableFuture<SubnetResponse> fetchSubnet(Principal subnetId, Principal effectiveCanisterId, boolean disableRangeCheck)
+			throws AgentError {
+		List<List<byte[]>> paths = new ArrayList<List<byte[]>>();
+
+		List<byte[]> path = new ArrayList<byte[]>();
+		path.add("subnet".getBytes());
+		path.add(subnetId.getValue());
+		paths.add(path);
+
+		CompletableFuture<SubnetResponse> response = new CompletableFuture<SubnetResponse>();
+
+		this.readStateRaw(effectiveCanisterId, paths,disableRangeCheck, null).whenComplete((input, ex) -> {
+			if (ex == null) {
+				if (input != null) {
+
+					try {
+						SubnetResponse data = ResponseAuthentication.lookupSubnet(input.certificate,
+								this.getRootKey());
+						response.complete(data);
+					} catch (AgentError e) {						
+						response.completeExceptionally(e);
+					}
+					catch (Exception e) {						
+						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR,e));
+					}					
+				} else {
+					response.completeExceptionally(
+							AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, input));
+				}
+			} else {
+				if(ex instanceof AgentError)
+				{			
+					AgentError e = (AgentError) ex;
+
+					response.completeExceptionally(e);
+				}
+				else
+					response.completeExceptionally(ex);
+			}
+		});
+
+		return response;
+	}	
+	
 	
 	public CompletableFuture<CertificateResponse> readStateRaw(Principal effectiveCanisterId, List<List<byte[]>> paths, Map<String,String> headers)
 			throws AgentError {
@@ -941,6 +1180,17 @@ public final class Agent {
 		return response;
 	}
 	
+	static Principal getSubnetId(Certificate certificate, byte[] rootKey) {
+		Principal subnetId;
+		
+		if(certificate.delegation != null && certificate.delegation.isPresent())
+			subnetId = Principal.from(certificate.delegation.get().subnetId);
+		else
+			subnetId = Principal.selfAuthenticating(rootKey);
+		
+		return subnetId;
+	}
+	
 	public static String cborToJson(byte[] input) throws IOException {
 		CBORFactory cborFactory = new CBORFactory();
 		CBORParser cborParser = cborFactory.createParser(input);
@@ -976,10 +1226,4 @@ public final class Agent {
 		public Certificate certificate;
 		public Map<String,String> headers;
 	}
-	
-	class PrincipalRange{
-		Principal low;
-		Principal high;
-	}
-
 }

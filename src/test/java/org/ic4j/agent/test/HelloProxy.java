@@ -14,6 +14,7 @@ import org.ic4j.agent.annotations.Transport;
 import org.ic4j.agent.annotations.Waiter;
 import org.ic4j.agent.annotations.QUERY;
 import org.ic4j.agent.annotations.UPDATE;
+import org.ic4j.agent.annotations.Verify;
 import org.ic4j.agent.annotations.Argument;
 import org.ic4j.candid.annotations.Modes;
 import org.ic4j.candid.annotations.Name;
@@ -22,12 +23,17 @@ import org.ic4j.candid.types.Type;
 import org.ic4j.types.Func;
 
 @Agent(identity = @Identity(type = IdentityType.BASIC, pem_file = "./src/test/resources/Ed25519_identity.pem"), transport = @Transport(url = "https://icp-api.io/"))
-@Canister("54ro3-xaaaa-aaaab-qac2q-cai")
-@EffectiveCanister("54ro3-xaaaa-aaaab-qac2q-cai")
+@Canister("3m5ej-xiaaa-aaaab-qacpa-cai")
+@EffectiveCanister("3m5ej-xiaaa-aaaab-qacpa-cai")
 public interface HelloProxy {
 	
 	@Modes(Mode.QUERY)
 	public String peek(@Argument(Type.TEXT)String name, @Argument(Type.INT) BigInteger value);
+	
+	@Modes(Mode.QUERY)
+	@Verify
+	@Name("peek")
+	public String peekSigned(@Argument(Type.TEXT)String name, @Argument(Type.INT) BigInteger value);	
 	
 	@QUERY
 	@Name("echoInt")

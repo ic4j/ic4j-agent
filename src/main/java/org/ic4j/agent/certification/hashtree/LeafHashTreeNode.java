@@ -14,18 +14,20 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent.certification.hashtree;
 
-enum NodeType{
-	EMPTY(0),
-	FORK(1),
-	LABELED(2),
-	LEAF(3),
-	PRUNED(4);	
+public final class LeafHashTreeNode extends HashTreeNode {
+	byte[] value;
 	
-	public int value;
-	
-	NodeType(int value) {
+	LeafHashTreeNode(byte[] value)
+	{
+		this.type = NodeType.LEAF;
 		this.value = value;
-	}		
+	}
+	
+	public byte[] getValue()
+	{
+		return this.value;
+	}
+
 }

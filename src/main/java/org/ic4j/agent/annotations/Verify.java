@@ -14,13 +14,18 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent.annotations;
 
-public final class EmptyHashTreeNode extends HashTreeNode {
-	
-	EmptyHashTreeNode()
-	{
-		this.type = NodeType.EMPTY;
-	}
+import static java.lang.annotation.ElementType.METHOD;
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
+
+import java.lang.annotation.Documented;
+import java.lang.annotation.Retention;
+import java.lang.annotation.Target;
+
+@Documented
+@Retention(RUNTIME)
+@Target(METHOD)
+public @interface Verify {
 
 }

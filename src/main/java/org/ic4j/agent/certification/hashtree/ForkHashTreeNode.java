@@ -14,15 +14,17 @@
  * limitations under the License.
 */
 
-package org.ic4j.agent.hashtree;
+package org.ic4j.agent.certification.hashtree;
 
-public final class PrunedHashTreeNode extends HashTreeNode {
-	byte[] digest;
+public final class ForkHashTreeNode extends HashTreeNode {
+	HashTreeNode left;
+	HashTreeNode right;
 	
-	PrunedHashTreeNode(byte[] digest)
+	ForkHashTreeNode(HashTreeNode left, HashTreeNode right)
 	{
-		this.type = NodeType.PRUNED;
-		this.digest = digest;
+		this.type = NodeType.FORK;
+		this.left = left;
+		this.right =right;
 	}
 
 }
