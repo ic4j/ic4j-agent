@@ -56,6 +56,10 @@ public class LoanTest {
 
 		Agent agent = new AgentBuilder().transport(transport).nonceFactory(new NonceFactory())
 				.build();
+		
+		boolean local = false;
+		if(local)
+			agent.fetchRootKey();
 				
 		
 		// Get Loan Offer Request	
