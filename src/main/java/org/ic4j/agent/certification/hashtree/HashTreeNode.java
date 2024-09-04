@@ -23,7 +23,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 
-import org.apache.commons.codec.digest.DigestUtils;
+import org.ic4j.agent.DigestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

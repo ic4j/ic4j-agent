@@ -24,8 +24,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.codec.DecoderException;
-import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.ArrayUtils;
 import org.ic4j.agent.certification.Certificate;
 import org.ic4j.agent.certification.hashtree.HashTree;
@@ -47,11 +45,7 @@ public final class ResponseAuthentication {
 	static final int KEY_LENGTH = 96;
 	
 	static {
-		try {
-			DER_PREFIX = Hex.decodeHex("308182301d060d2b0601040182dc7c0503010201060c2b0601040182dc7c05030201036100".toCharArray());
-		} catch (DecoderException e) {
-			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
-		}
+			DER_PREFIX = Hex.decodeHex("308182301d060d2b0601040182dc7c0503010201060c2b0601040182dc7c05030201036100");
 	}
 	
 	static byte[] extractDer(byte[] buf) throws AgentError

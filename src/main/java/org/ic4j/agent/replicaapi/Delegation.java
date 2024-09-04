@@ -19,10 +19,8 @@ package org.ic4j.agent.replicaapi;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-import org.apache.commons.codec.DecoderException;
-import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.ArrayUtils;
-import org.ic4j.agent.AgentError;
+import org.ic4j.agent.Hex;
 import org.ic4j.agent.Serialize;
 import org.ic4j.agent.Serializer;
 import org.ic4j.agent.requestid.RequestId;
@@ -73,15 +71,11 @@ public final class Delegation implements Serialize{
 	{
 		byte[] hash = RequestId.toRequestId(this).get();
 		
-		try {
-			;
+
 			byte[] separator = ArrayUtils.addAll(Hex.decodeHex("1A"),IC_REQUEST_DELEGATION_DOMAIN_SEPARATOR);
 			byte[] bytes = ArrayUtils.addAll(separator,hash);
 			
 			return bytes;
-		} catch (DecoderException e) {
-			throw AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, e);
-		}
 	}
 
 	@Override

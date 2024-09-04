@@ -16,8 +16,7 @@
 
 package org.ic4j.agent.requestid;
 
-import org.apache.commons.codec.DecoderException;
-import org.apache.commons.codec.binary.Hex;
+import org.ic4j.agent.Hex;
 import org.ic4j.agent.Serialize;
 
 public final class RequestId {
@@ -65,14 +64,10 @@ public final class RequestId {
 	public static RequestId fromHexString(String hexValue) 
 	{
 
-		try {
 			if(hexValue == null)
 				throw RequestIdError.create(RequestIdError.RequestIdErrorCode.EMPTY_SERIALIZER);
 			
-			return new RequestId((Hex.decodeHex(hexValue.toCharArray())));
-		} catch (DecoderException e) {
-			throw RequestIdError.create(RequestIdError.RequestIdErrorCode.CUSTOM_SERIALIZER_ERROR, e, e.getLocalizedMessage());
-		}
+			return new RequestId((Hex.decodeHex(hexValue)));
 	}	
 	
 	public byte[] get()
