@@ -23,8 +23,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
-//import org.apache.commons.codec.DecoderException;
-//import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.ArrayUtils;
 import org.ic4j.agent.AgentError;
 import org.ic4j.agent.Hex;

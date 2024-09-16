@@ -29,7 +29,6 @@ import java.util.TreeMap;
 import org.ic4j.agent.DigestUtils;
 import org.ic4j.agent.Serialize;
 import org.ic4j.agent.Serializer;
-import org.ic4j.candid.ByteUtils;
 import org.ic4j.candid.Leb128;
 import org.ic4j.types.Principal;
 import org.slf4j.Logger;
