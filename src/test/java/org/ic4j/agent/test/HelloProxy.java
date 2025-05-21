@@ -23,8 +23,8 @@ import org.ic4j.candid.types.Type;
 import org.ic4j.types.Func;
 
 @Agent(identity = @Identity(type = IdentityType.BASIC, pem_file = "./src/test/resources/Ed25519_identity.pem"), transport = @Transport(url = "https://icp-api.io/"))
-@Canister("zwbmv-jyaaa-aaaab-qacaa-cai")
-@EffectiveCanister("zwbmv-jyaaa-aaaab-qacaa-cai")
+@Canister("3rmwp-waaaa-aaaab-qbmza-cai")
+@EffectiveCanister("3rmwp-waaaa-aaaab-qbmza-cai")
 public interface HelloProxy {
 	
 	@Modes(Mode.QUERY)
