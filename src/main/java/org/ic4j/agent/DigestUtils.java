@@ -19,8 +19,6 @@ package org.ic4j.agent;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-import javax.xml.bind.DatatypeConverter;
-
 public class DigestUtils {
 	
 	public static MessageDigest getSha256Digest() {

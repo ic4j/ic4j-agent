@@ -1,8 +1,8 @@
 import Principal "mo:base/Principal";
 import Debug "mo:base/Debug";
 
-actor {
-    stable var name = "Me";
+persistent actor {
+    var name = "Me";
 
     type F0 = shared () -> async ();
     type F1 = shared Text -> async Text;

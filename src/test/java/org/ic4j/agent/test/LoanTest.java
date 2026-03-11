@@ -57,8 +57,7 @@ public class LoanTest {
 		Agent agent = new AgentBuilder().transport(transport).nonceFactory(new NonceFactory())
 				.build();
 		
-		boolean local = false;
-		if(local)
+		if (TestProperties.isLocalReplicaUrl(TestProperties.LOAN_URL))
 			agent.fetchRootKey();
 				
 		
@@ -267,28 +266,30 @@ public class LoanTest {
 			Assertions.fail(ex.getLocalizedMessage());
 		}
 		
-		ProxyBuilder proxyBuilder = ProxyBuilder.create(agent).loadIDL(true);
-		
-		Func funcValue = new Func(Principal.fromString(TestProperties.LOAN_CANISTER_ID), "echoApplications");
-		
-		FuncProxy<LoanApplication[]> funcProxy = proxyBuilder.getFuncProxy(funcValue);
-		
-		funcProxy.setResponseClass(LoanApplication[].class);
-		
-		LoanApplication[] loanApplicationArrayResult = funcProxy.call(Arrays.asList(loanApplicationArray));
-		
-		Assertions.assertArrayEquals(loanApplicationArray, loanApplicationArrayResult);	
-		
-		FuncProxy<List<LoanApplication>> listFuncProxy = proxyBuilder.getFuncProxy(funcValue);
-		
-		List<LoanApplication> list = new ArrayList<LoanApplication>() { }; // create a specific sub-class
-		Class<? extends List> listClass = list.getClass();
+		if (!TestProperties.isLocalReplicaUrl(TestProperties.LOAN_URL)) {
+			ProxyBuilder proxyBuilder = ProxyBuilder.create(agent).loadIDL(true);
+			
+			Func funcValue = new Func(Principal.fromString(TestProperties.LOAN_CANISTER_ID), "echoApplications");
+			
+			FuncProxy<LoanApplication[]> funcProxy = proxyBuilder.getFuncProxy(funcValue);
+			
+			funcProxy.setResponseClass(LoanApplication[].class);
+			
+			LoanApplication[] loanApplicationArrayResult = funcProxy.call(Arrays.asList(loanApplicationArray));
+			
+			Assertions.assertArrayEquals(loanApplicationArray, loanApplicationArrayResult);	
+			
+			FuncProxy<List<LoanApplication>> listFuncProxy = proxyBuilder.getFuncProxy(funcValue);
+			
+			List<LoanApplication> list = new ArrayList<LoanApplication>() { }; // create a specific sub-class
+			Class<? extends List> listClass = list.getClass();
 						
-		listFuncProxy.setResponseClass(listClass);
-		
-		List<LoanApplication> loanApplicationListResult =  listFuncProxy.call(Arrays.asList(loanApplicationArray));
-		
-		Assertions.assertArrayEquals(loanApplicationArray,loanApplicationListResult.toArray());
+			listFuncProxy.setResponseClass(listClass);
+			
+			List<LoanApplication> loanApplicationListResult =  listFuncProxy.call(Arrays.asList(loanApplicationArray));
+			
+			Assertions.assertArrayEquals(loanApplicationArray,loanApplicationListResult.toArray());
+		}
 		
 		agent.close();
 		

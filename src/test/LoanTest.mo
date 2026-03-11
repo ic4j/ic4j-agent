@@ -1,7 +1,7 @@
 import Principal "mo:base/Principal";
 import Time "mo:base/Time";
 
-actor class LoanTest() = this{
+persistent actor class LoanTest() = this{
      // Loan Application
   public type LoanApplication = {
     id: Nat;

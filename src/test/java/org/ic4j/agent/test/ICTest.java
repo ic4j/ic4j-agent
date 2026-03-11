@@ -129,6 +129,9 @@ public class ICTest {
 			Agent agent = new AgentBuilder().transport(transport).identity(identity).nonceFactory(new NonceFactory())
 					.ingresExpiry(Duration.ofMinutes(4)).build();
 
+			if (TestProperties.isLocalReplicaUrl(TestProperties.IC_URL))
+				agent.fetchRootKey();
+
 			try {
 				Subnet subnet = agent.getSubnet(Principal.fromString(TestProperties.IC_CANISTER_ID),
 						Principal.fromString(TestProperties.IC_CANISTER_ID));
@@ -138,7 +141,8 @@ public class ICTest {
 				Assertions.fail(e.getLocalizedMessage());
 			}
 
-			String idlFile = agent.getIDL(Principal.fromString(TestProperties.IC_CANISTER_ID));
+			if (!TestProperties.isLocalReplicaUrl(TestProperties.IC_URL))
+				agent.getIDL(Principal.fromString(TestProperties.IC_CANISTER_ID));
 
 			List<IDLValue> args = new ArrayList<IDLValue>();
 
@@ -203,8 +207,12 @@ public class ICTest {
 				Throwable causeEx = ex.getCause();
 
 				if (causeEx != null && causeEx instanceof AgentError)
-					Assertions.assertEquals(AgentError.AgentErrorCode.REPLICA_ERROR,
-							(((AgentError) causeEx).getCode()));
+				{
+					AgentError.AgentErrorCode expectedCode = TestProperties.isLocalReplicaUrl(TestProperties.IC_URL)
+							? AgentError.AgentErrorCode.MESSAGE_ERROR
+							: AgentError.AgentErrorCode.REPLICA_ERROR;
+					Assertions.assertEquals(expectedCode, (((AgentError) causeEx).getCode()));
+				}
 				else
 					Assertions.fail(ex.getLocalizedMessage());
 			}
@@ -212,8 +220,11 @@ public class ICTest {
 			try {
 
 				Service service = new Service(Principal.fromString(TestProperties.IC_CANISTER_ID));
+				Path idlPath = Paths.get(getClass().getClassLoader().getResource(IC_TEST_IDL_FILE).getPath());
 
-				ProxyBuilder proxyBuilder = ProxyBuilder.create(agent).loadIDL(true);
+				ProxyBuilder proxyBuilder = TestProperties.isLocalReplicaUrl(TestProperties.IC_URL)
+						? ProxyBuilder.create(agent).idlFile(idlPath)
+						: ProxyBuilder.create(agent).loadIDL(true);
 
 				ServiceProxy serviceProxy = proxyBuilder.getServiceProxy(service);
 
@@ -321,8 +332,6 @@ public class ICTest {
 
 				queryResponse = agent.queryRaw(Principal.fromString(TestProperties.IC_CANISTER_ID),
 						Principal.fromString(TestProperties.IC_CANISTER_ID), "peek", buf, Optional.empty());
-
-				Path idlPath = Paths.get(getClass().getClassLoader().getResource(IC_TEST_IDL_FILE).getPath());
 
 				proxyBuilder = ProxyBuilder.create(agent).idlFile(idlPath);
 

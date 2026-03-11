@@ -2,7 +2,6 @@ package org.ic4j.agent.test;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -39,13 +38,10 @@ import org.ic4j.candid.parser.IDLValue;
 import org.ic4j.types.Principal;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockserver.client.NettyHttpClient;
 import org.mockserver.model.HttpRequest;
 import org.mockserver.model.HttpResponse;
 import org.mockserver.model.HttpStatusCode;
 import org.mockserver.model.MediaType;
-import org.mockserver.proxyconfiguration.ProxyConfiguration;
-import org.mockserver.proxyconfiguration.ProxyConfiguration.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -216,16 +212,7 @@ public class UpdateTest extends MockTest {
 						.getResource(TestProperties.CBOR_UPDATE_GREET_RESPONSE_FILE).getPath()));
 
 				if (TestProperties.FORWARD) {
-					NettyHttpClient client = new NettyHttpClient(null, clientEventLoopGroup,
-							ProxyConfiguration.proxyConfiguration(Type.HTTP,
-									new InetSocketAddress(TestProperties.FORWARD_HOST, TestProperties.FORWARD_PORT)),
-							false);
-
-					response = client
-							.sendRequest(HttpRequest.request().withMethod("POST").withHeaders(httpRequest.getHeaders())
-									.withPath("/api/v2/canister/" + TestProperties.CANISTER_ID + "/read_state")
-									.withBody(request))
-							.get().getBodyAsRawBytes();
+					response = forwardRequest(httpRequest);
 
 					if (TestProperties.STORE)
 						Files.write(Paths.get(TestProperties.STORE_PATH + File.separator
@@ -258,15 +245,7 @@ public class UpdateTest extends MockTest {
 				Envelope<CallRequestContent> envelope = objectMapper.readValue(request, Envelope.class);
 
 				if (TestProperties.FORWARD) {
-					NettyHttpClient client = new NettyHttpClient(null, clientEventLoopGroup,
-							ProxyConfiguration.proxyConfiguration(Type.HTTP,
-									new InetSocketAddress(TestProperties.FORWARD_HOST, TestProperties.FORWARD_PORT)),
-							false);
-
-					response = client
-							.sendRequest(HttpRequest.request().withMethod("POST").withHeaders(httpRequest.getHeaders())
-									.withPath("/api/v2/canister/rrkah-fqaaa-aaaaa-aaaaq-cai/call").withBody(request))
-							.get().getBodyAsRawBytes();
+					response = forwardRequest(httpRequest);
 				}
 
 				return HttpResponse.response().withStatusCode(HttpStatusCode.OK_200.code()).withBody(response);

@@ -1,6 +1,5 @@
 # dfinity-agent
-Read complete documentation here <a href="https://docs.ic4j.com">
-https://docs.ic4j.com</a>.
+Read complete documentation here [https://docs.ic4j.com](https://docs.ic4j.com).
 
 IC4J Java open source libraries provide a range of tools and interfaces for Java developers to interact with the Internet Computer network and build decentralized applications on top of it.
 
@@ -94,13 +93,15 @@ Security.addProvider(new BouncyCastleProvider());
 ### HTTP Transport
 
 ```
-ReplicaTransport transport = ReplicaApacheHttpTransport.create("http://localhost:8000");
+ReplicaTransport transport = ReplicaApacheHttpTransport.create("http://127.0.0.1:4943/");
 ```
 or for Android
 
 ```
-ReplicaTransport transport = ReplicaOkHttpTransport.create("http://localhost:8000");
+ReplicaTransport transport = ReplicaOkHttpTransport.create("http://127.0.0.1:4943/");
 ```
+
+The examples above use the default local DFX replica endpoint.
 
 ## Agent Class
 
@@ -188,9 +189,9 @@ IDLArgs outArgs = IDLArgs.fromBytes(output);
 Additionally you can also use Dynamic Proxy Class with facade Java interface that maps methods in the Internet Computer Canister. Agent values can be replaced with Agent Java object  
 
 ```
-@Agent(identity = @Identity(type = IdentityType.BASIC, pem_file = "./src/test/resources/Ed25519_identity.pem"), transport = @Transport(url = "http://localhost:8001"))
-@Canister("rrkah-fqaaa-aaaaa-aaaaq-cai")
-@EffectiveCanister("rrkah-fqaaa-aaaaa-aaaaq-cai")
+@Agent(identity = @Identity(type = IdentityType.BASIC, pem_file = "./src/test/resources/Ed25519_identity.pem"), transport = @Transport(url = "http://127.0.0.1:4943/"))
+@Canister("uxrrr-q7777-77774-qaaaq-cai")
+@EffectiveCanister("uxrrr-q7777-77774-qaaaq-cai")
 public interface HelloProxy {
 	
 	@QUERY
@@ -319,26 +320,26 @@ byte[] buf = idlArgs.toBytes();
 
 To add IC4J Agent library to your Java project use Maven or Gradle import from Maven Central.
 
-<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.7.5/jar">
-https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.7.5/jar
+<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.8.0/jar">
+https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.8.0/jar
 </a>
 
 ```
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-agent</artifactId>
-  <version>0.7.5</version>
+	<version>0.8.0</version>
 </dependency>
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-candid</artifactId>
-  <version>0.7.5</version>
+	<version>0.8.0</version>
 </dependency>
 ```
 
 ```
-implementation 'org.ic4j:ic4j-agent:0.7.5'
-implementation 'org.ic4j:ic4j-candid:0.7.5'
+implementation 'org.ic4j:ic4j-agent:0.8.0'
+implementation 'org.ic4j:ic4j-candid:0.8.0'
 ```
 
 
@@ -367,5 +368,32 @@ To manage BLS12381 algorithm.
 
 # Build
 
-You need JDK 8+ to build Dfinity Agent.
+IC4J Agent is built for Java 8 compatibility and is validated on JDK 8, JDK 11, and JDK 21.
+
+## Test Matrix
+
+Compile and test on JDK 8:
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-1.8.jdk/Contents/Home
+export PATH="$JAVA_HOME/bin:$PATH"
+gradle clean test --console=plain
+```
+
+Test on JDK 11:
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-11.jdk/Contents/Home
+export PATH="$JAVA_HOME/bin:$PATH"
+gradle clean test --console=plain
+```
+
+Run the local integration flow on JDK 21:
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home
+export PATH="$JAVA_HOME/bin:$PATH"
+./scripts/deploy_local_tests.sh && gradle cleanTest test --console=plain
+```
+
 

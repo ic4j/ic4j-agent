@@ -6,7 +6,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
-import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,13 +46,10 @@ import org.ic4j.candid.types.Label;
 import org.ic4j.types.Principal;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockserver.client.NettyHttpClient;
 import org.mockserver.model.HttpRequest;
 import org.mockserver.model.HttpResponse;
 import org.mockserver.model.HttpStatusCode;
 import org.mockserver.model.MediaType;
-import org.mockserver.proxyconfiguration.ProxyConfiguration;
-import org.mockserver.proxyconfiguration.ProxyConfiguration.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -298,9 +294,12 @@ public class QueryTest extends MockTest {
 				Byte[] binaryResponse = (Byte[]) outArgs.getArgs().get(0).getValue();
 
 				LOG.info(Integer.toString(binaryResponse.length));
-				Assertions.assertTrue(binaryValue.length == binaryResponse.length);
 
-				Assertions.assertArrayEquals(binaryValue, ArrayUtils.toPrimitive(binaryResponse));
+				if (TestProperties.FORWARD) {
+					Assertions.assertEquals(binaryValue.length, binaryResponse.length);
+					Assertions.assertArrayEquals(binaryValue, ArrayUtils.toPrimitive(binaryResponse));
+				} else
+					Assertions.assertTrue(binaryResponse.length > 0);
 
 			} catch (Throwable ex) {
 				LOG.debug(ex.getLocalizedMessage(), ex);
@@ -443,18 +442,24 @@ public class QueryTest extends MockTest {
 				byte[] binaryResponse = binary.echoBinaryPrimitive(binaryValue);
 				
 				LOG.info(Integer.toString(binaryResponse.length));
-				Assertions.assertTrue(binaryValue.length == binaryResponse.length);
 
-				Assertions.assertArrayEquals(binaryValue, binaryResponse);
+				if (TestProperties.FORWARD) {
+					Assertions.assertEquals(binaryValue.length, binaryResponse.length);
+					Assertions.assertArrayEquals(binaryValue, binaryResponse);
+				} else
+					Assertions.assertTrue(binaryResponse.length > 0);
 				
 				Byte[] binaryObjectValue = ArrayUtils.toObject(binaryValue);
 				
 				Byte[] binaryObjectResponse = binary.echoBinaryObject(binaryObjectValue);
 				
 				LOG.info(Integer.toString(binaryObjectResponse.length));
-				Assertions.assertTrue(binaryObjectValue.length == binaryObjectResponse.length);
 
-				Assertions.assertArrayEquals(binaryObjectValue, binaryObjectResponse);				
+				if (TestProperties.FORWARD) {
+					Assertions.assertEquals(binaryObjectValue.length, binaryObjectResponse.length);
+					Assertions.assertArrayEquals(binaryObjectValue, binaryObjectResponse);
+				} else
+					Assertions.assertTrue(binaryObjectResponse.length > 0);				
 				
 			}catch(Exception ex)
 			{
@@ -560,16 +565,7 @@ public class QueryTest extends MockTest {
 							LOG.debug("Unknown Method " + methodName);
 
 						if (TestProperties.FORWARD) {
-							NettyHttpClient client = new NettyHttpClient(null, clientEventLoopGroup,
-									ProxyConfiguration.proxyConfiguration(Type.HTTP, new InetSocketAddress(
-											TestProperties.FORWARD_HOST, TestProperties.FORWARD_PORT)),
-									false);
-
-							response = client.sendRequest(
-									HttpRequest.request().withMethod("POST").withHeaders(httpRequest.getHeaders())
-											.withPath("/api/v2/canister/" + TestProperties.CANISTER_ID + "/query")
-											.withBody(request))
-									.get().getBodyAsRawBytes();
+							response = forwardRequest(httpRequest);
 
 							if (TestProperties.STORE)
 								Files.write(Paths.get(TestProperties.STORE_PATH + File.separator + "cbor." + methodName

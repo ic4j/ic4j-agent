@@ -2,7 +2,6 @@ package org.ic4j.agent.test;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -17,13 +16,10 @@ import org.ic4j.agent.http.ReplicaApacheHttpTransport;
 import org.ic4j.agent.http.ReplicaOkHttpTransport;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockserver.client.NettyHttpClient;
 import org.mockserver.model.HttpRequest;
 import org.mockserver.model.HttpResponse;
 import org.mockserver.model.HttpStatusCode;
 import org.mockserver.model.MediaType;
-import org.mockserver.proxyconfiguration.ProxyConfiguration;
-import org.mockserver.proxyconfiguration.ProxyConfiguration.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,14 +82,7 @@ public class StatusTest extends MockTest {
 				byte[] response = {};
 
 				if (TestProperties.FORWARD) {
-					NettyHttpClient client = new NettyHttpClient(null, clientEventLoopGroup,
-							ProxyConfiguration.proxyConfiguration(Type.HTTP,
-									new InetSocketAddress(TestProperties.FORWARD_HOST, TestProperties.FORWARD_PORT)),
-							false);
-
-					response = client.sendRequest(HttpRequest.request().withMethod("GET")
-							.withHeaders(httpRequest.getHeaders()).withPath("/api/v2/status")).get()
-							.getBodyAsRawBytes();
+					response = forwardRequest(httpRequest);
 
 					if (TestProperties.STORE)
 						Files.write(Paths.get(

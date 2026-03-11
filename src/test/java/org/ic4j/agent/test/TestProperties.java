@@ -78,6 +78,13 @@ final class TestProperties extends Properties{
 	protected static String PRIME256V1_IDENTITY_PRIVATE_FILE = "Prime256v1_identity_private.pem";	
 	
 	protected static  String TRANSPORT_TYPE = "http.apache";
+
+	protected static boolean isLocalReplicaUrl(String url) {
+		if (url == null)
+			return false;
+
+		return url.startsWith("http://127.0.0.1:") || url.startsWith("http://localhost:");
+	}
 	
 	static
 	{	 
