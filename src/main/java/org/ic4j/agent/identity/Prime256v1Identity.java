@@ -138,7 +138,7 @@ public final class Prime256v1Identity extends Identity {
 		try {
 
 			// Generate new signature
-			java.security.Signature dsa = java.security.Signature.getInstance("SHA512withECDSA", BouncyCastleProvider.PROVIDER_NAME);
+			java.security.Signature dsa = java.security.Signature.getInstance("SHA256withPLAIN-ECDSA", BouncyCastleProvider.PROVIDER_NAME);
 			// ECDSA digital signature algorithm
 			dsa.initSign(this.keyPair.getPrivate());
 

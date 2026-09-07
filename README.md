@@ -78,13 +78,25 @@ Identity identity = BasicIdentity.fromPEMFile(path);
 
 Get Key Pair from PEM file
 
-```
+```java
 Identity identity = Secp256k1Identity.fromPEMFile(path);
 ```
 
-For Basic and Identities we are using Bouncy Castle open source libraries. To add it to your Java code you can use this code
+Secp256k1 signatures use the 64-byte `r || s` format required by the Internet Computer replica and are normalized to canonical low-S form.
 
+### Prime256v1 Identity (ECDSA P-256)
+
+Get Key Pair from PEM file
+
+```java
+Identity identity = Prime256v1Identity.fromPEMFile(path);
 ```
+
+Prime256v1 signatures use SHA-256 and the 64-byte `r || s` format required by the Internet Computer replica.
+
+Basic, Secp256k1, and Prime256v1 identities use the Bouncy Castle cryptography libraries. To register the provider in your Java code, use:
+
+```java
 Security.addProvider(new BouncyCastleProvider());
 ```
 
@@ -320,15 +332,15 @@ byte[] buf = idlArgs.toBytes();
 
 To add IC4J Agent library to your Java project use Maven or Gradle import from Maven Central.
 
-<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.8.0/jar">
-https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.8.0/jar
+<a href="https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.8.1/jar">
+https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.8.1/jar
 </a>
 
-```
+```xml
 <dependency>
   <groupId>org.ic4j</groupId>
   <artifactId>ic4j-agent</artifactId>
-	<version>0.8.0</version>
+	<version>0.8.1</version>
 </dependency>
 <dependency>
   <groupId>org.ic4j</groupId>
@@ -337,8 +349,8 @@ https://search.maven.org/artifact/org.ic4j/ic4j-agent/0.8.0/jar
 </dependency>
 ```
 
-```
-implementation 'org.ic4j:ic4j-agent:0.8.0'
+```gradle
+implementation 'org.ic4j:ic4j-agent:0.8.1'
 implementation 'org.ic4j:ic4j-candid:0.8.0'
 ```
 
@@ -357,10 +369,7 @@ To provide HTTP POST and GET operations for Android.
 To manage CBOR payloads.
 
 ### Bouncy Castle Cryptography Libraries
-To manage Ed25519 and Secp256k1 signatures.
-
-### Bouncy Castle Cryptography Libraries
-To manage Ed25519 and Secp256k1 signatures.
+To manage Ed25519, Secp256k1, and Prime256v1 signatures.
 
 ### MIRACL Core Cryptographic Library
 To manage BLS12381 algorithm. 
@@ -372,11 +381,18 @@ IC4J Agent is built for Java 8 compatibility and is validated on JDK 8, JDK 11, 
 
 ## Test Matrix
 
-Compile and test on JDK 8:
+The integration suite runs against a local replica and exercises both Apache HttpClient and OkHttp. Deploy the test canisters and synchronize their local IDs before running the matrix:
 
 ```bash
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-1.8.jdk/Contents/Home
+./scripts/deploy_local_tests.sh
+```
+
+Compile and test on JDK 8. `JAVA_HOME` must point to a full JDK containing `bin/javac`, not a JRE:
+
+```bash
+export JAVA_HOME="$HOME/.sdkman/candidates/java/8.0.452-amzn"
 export PATH="$JAVA_HOME/bin:$PATH"
+javac -version
 gradle clean test --console=plain
 ```
 
@@ -388,12 +404,12 @@ export PATH="$JAVA_HOME/bin:$PATH"
 gradle clean test --console=plain
 ```
 
-Run the local integration flow on JDK 21:
+Test on JDK 21:
 
 ```bash
 export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home
 export PATH="$JAVA_HOME/bin:$PATH"
-./scripts/deploy_local_tests.sh && gradle cleanTest test --console=plain
+gradle clean test --console=plain
 ```
 
 

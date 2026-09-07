@@ -67,7 +67,8 @@ import org.ic4j.types.Principal;
 import org.ic4j.types.PrincipalError;
 import org.ic4j.types.Service;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.skyscreamer.jsonassert.JSONAssert;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.slf4j.Logger;
@@ -95,8 +96,9 @@ public class ICTest {
 
 	ObjectMapper mapper = new ObjectMapper();
 
-	@Test
-	public void test() {
+	@ParameterizedTest(name = "{0}")
+	@ValueSource(strings = { "http.apache", "http.ok" })
+	public void test(String transportType) {
 		dbf.setNamespaceAware(true);
 		dbf.setIgnoringElementContentWhitespace(true);
 
@@ -114,8 +116,6 @@ public class ICTest {
 					.get(getClass().getClassLoader().getResource(TestProperties.SECP256K1_IDENTITY_FILE).getPath());
 
 			// identity = Secp256k1Identity.fromPEMFile(path);
-
-			String transportType = TestProperties.TRANSPORT_TYPE;
 
 			switch (transportType) {
 			case "http.ok":

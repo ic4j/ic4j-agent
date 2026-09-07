@@ -156,7 +156,7 @@ public class IdentityTest {
 
 			signature = identity.sign("Hello".getBytes());
 
-			sig = java.security.Signature.getInstance("SHA512withECDSA", BouncyCastleProvider.PROVIDER_NAME);
+			sig = java.security.Signature.getInstance("SHA256withPLAIN-ECDSA", BouncyCastleProvider.PROVIDER_NAME);
 
 			kf = KeyFactory.getInstance("ECDSA", BouncyCastleProvider.PROVIDER_NAME);
 
@@ -322,7 +322,9 @@ public class IdentityTest {
 	        
 			Certificate certificate = objectMapper.readValue(readStateResponse.certificate, Certificate.class);
 			
-			agent.verify(certificate, Principal.fromString("ivg37-qiaaa-aaaab-aaaga-cai"), false);
+			AgentError staleCertificate = Assertions.assertThrows(AgentError.class,
+					() -> agent.verify(certificate, Principal.fromString("ivg37-qiaaa-aaaab-aaaga-cai"), false));
+			Assertions.assertEquals(AgentError.AgentErrorCode.CERTIFICATE_OUTDATED, staleCertificate.getCode());
 			
 			try {
 				agent.verify(certificate, Principal.fromString("ryjl3-tyaaa-aaaaa-aaaba-cai"), false);

@@ -17,6 +17,7 @@
 package org.ic4j.agent;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ import org.ic4j.agent.certification.hashtree.SubtreeLookupResult;
 import org.ic4j.agent.replicaapi.CallReply;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.candid.Leb128;
+import org.ic4j.candid.CandidError;
 import org.ic4j.types.Principal;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -60,6 +62,21 @@ public final class ResponseAuthentication {
 			throw AgentError.create(AgentError.AgentErrorCode.DER_PREFIX_MISMATCH, expectedLength, buf.length);
 
 		return ArrayUtils.subarray(buf, DER_PREFIX.length, buf.length);
+	}
+
+	static long lookupTime(Certificate certificate) {
+		List<Label> path = new ArrayList<>();
+		path.add(new Label("time"));
+		byte[] encoded = lookupValue(certificate, path);
+		try {
+			ByteBuffer buffer = ByteBuffer.wrap(encoded);
+			long timestamp = Leb128.readUnsigned(buffer);
+			if(buffer.hasRemaining())
+				throw AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, "Trailing certificate timestamp data");
+			return timestamp;
+		} catch (CandidError | RuntimeException e) {
+			throw AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, e, "Invalid certificate timestamp");
+		}
 	}
 
 	static RequestStatusResponse lookupRequestStatus(Certificate certificate, RequestId requestId) throws AgentError {

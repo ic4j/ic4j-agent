@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.List;
 
 import org.ic4j.agent.DigestUtils;
@@ -36,67 +35,46 @@ public abstract class HashTreeNode {
 	NodeType type;
 	
 	static HashTreeNode deserialize(JsonNode node) {
-		
-		if(node.isArray())
-		{
-			int tag = node.get(0).intValue();
-			
-			switch( tag)
-			{
-			case 0: 
-				if(node.size() > 1)
-					throw new Error("Invalid Length");
-				return new EmptyHashTreeNode();
-			case 1: 
-				if(node.size() != 3)
-					throw new Error("Invalid Length");
-				HashTreeNode left = HashTreeNode.deserialize(node.get(1));
-				HashTreeNode right = HashTreeNode.deserialize(node.get(2));
-				return new ForkHashTreeNode(left,right);	
-			case 2: 
-				if(node.size() != 3)
-					throw new Error("Invalid Length");
-				try {
-					// Incompatible with Android, using custom function instead
-					Label label = new Label(Base64.getDecoder().decode(node.get(1).asText()));	
-					
-					//Label label1 = new Label(Base64.decodeBase64(node.get(1).asText()));
-					//Label label = new Label(Base64.decodeBase64(node.get(1).binaryValue()));
-					
-					HashTreeNode subtree = HashTreeNode.deserialize(node.get(2));
-					return new LabeledHashTreeNode(label,subtree);	
-				} catch (Exception e) {
-					throw new Error(String.format("Invalid Node Type %s", node.getNodeType().name()));
-				}
-			case 3: 
-				if(node.size() != 2)
-					throw new Error("Invalid Length");
-				try {
-					byte[] value = node.get(1).binaryValue();
-					return new LeafHashTreeNode(value);	
-				} catch (IOException e) {
-					throw new Error(String.format("Invalid Node Type %s", node.getNodeType().name()));
-				}
-			case 4: 
-				if(node.size() != 2)
-					throw new Error("Invalid Length");
-				try {
-					byte[] value = node.get(1).binaryValue();
-					
-					if(value.length != 32)
-						throw new Error("Invalid Length");
-					
-					return new PrunedHashTreeNode(value);	
-				} catch (IOException e) {
-					throw new Error(String.format("Invalid Node Type %s", node.getNodeType().name()));
-				}				
-			default:
-				throw new Error(String.format("Unknown tag: %d, expected the tag to be one of {{0, 1, 2, 3, 4}}",tag));
-			}
+		return deserialize(node, 0);
+	}
+
+	private static HashTreeNode deserialize(JsonNode node, int depth) {
+		if(depth > 128 || node == null || !node.isArray() || node.size() == 0
+				|| !node.get(0).isIntegralNumber() || !node.get(0).canConvertToInt())
+			throw new IllegalArgumentException("Invalid hash tree node or excessive nesting");
+		int tag = node.get(0).intValue();
+		int expectedSize;
+		switch(tag) {
+		case 0: expectedSize = 1; break;
+		case 1:
+		case 2: expectedSize = 3; break;
+		case 3:
+		case 4: expectedSize = 2; break;
+		default: throw new IllegalArgumentException("Unknown hash tree tag: " + tag);
 		}
-		else
-			throw new Error(String.format("Invalid Node Type %s", node.getNodeType().name()));
-			
+		if(node.size() != expectedSize)
+			throw new IllegalArgumentException("Invalid hash tree node length");
+		try {
+			switch(tag) {
+			case 0:
+				return new EmptyHashTreeNode();
+			case 1:
+				return new ForkHashTreeNode(deserialize(node.get(1), depth + 1), deserialize(node.get(2), depth + 1));
+			default:
+				if(!node.get(1).isBinary())
+					throw new IllegalArgumentException("Expected hash tree byte string");
+				byte[] value = node.get(1).binaryValue();
+				if(tag == 2)
+					return new LabeledHashTreeNode(new Label(value), deserialize(node.get(2), depth + 1));
+				if(tag == 3)
+					return new LeafHashTreeNode(value);
+				if(value.length != 32)
+					throw new IllegalArgumentException("Invalid pruned hash length");
+				return new PrunedHashTreeNode(value);
+			}
+		} catch (IOException e) {
+			throw new IllegalArgumentException("Invalid hash tree byte string", e);
+		}
 	}
 
 	/*

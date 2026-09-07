@@ -88,11 +88,23 @@ public final class Agent {
 	Duration ingressExpiryDuration;
 	Identity identity;
 	NonceFactory nonceFactory;
-	Optional<byte[]> rootKey;
+	volatile Optional<byte[]> rootKey;
 	
-	static Map<Principal, Subnet> subnetCache = new WeakHashMap<Principal,Subnet>();
+	final Map<Principal, CachedSubnet> subnetCache = new WeakHashMap<>();
 	
-	boolean verify = true;
+	volatile boolean verify = true;
+
+	static final class CachedSubnet {
+		final Subnet subnet;
+		final Principal effectiveCanisterId;
+		final Instant expiresAt;
+
+		CachedSubnet(Subnet subnet, Principal effectiveCanisterId, Instant expiresAt) {
+			this.subnet = subnet;
+			this.effectiveCanisterId = effectiveCanisterId;
+			this.expiresAt = expiresAt;
+		}
+	}
 	
 	static {
 		try {
@@ -130,8 +142,9 @@ public final class Agent {
 		this.rootKey = Optional.of(IC_ROOT_KEY);
 	}
 	
-	public void setVerify(boolean verify)
+	public synchronized void setVerify(boolean verify)
 	{
+		this.subnetCache.clear();
 		if(BLS_VERIFY)
 			this.verify = verify;
 	}
@@ -185,7 +198,8 @@ public final class Agent {
 	 */
 
 	public synchronized void setRootKey(byte[] rootKey) throws AgentError {
-		this.rootKey = Optional.of(rootKey);
+		this.rootKey = Optional.of(rootKey.clone());
+		this.subnetCache.clear();
 	}
 
 	byte[] getRootKey() throws AgentError {
@@ -364,10 +378,11 @@ public final class Agent {
 			
 			for(NodeSignature signature : response.signatures)
 			{
-				Instant instantNow = Instant.now();
-				Instant instantTimestamp = Instant.ofEpochMilli(signature.timestamp);
-				if(instantNow.toEpochMilli() - instantTimestamp.toEpochMilli()  > this.ingressExpiryDuration.getNano())
-					throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_OUTDATED,this.ingressExpiryDuration.getSeconds());
+				if(signature == null || signature.signature == null || signature.signature.length != 64)
+					throw AgentError.create(AgentError.AgentErrorCode.MALFORMED_SIGNATURE);
+				if(signature.identity == null)
+					throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED);
+				this.verifyTimestamp(signature.timestamp);
 				
 				byte[] signable = response.signable(requestId, signature.timestamp);
 				
@@ -390,7 +405,7 @@ public final class Agent {
                 
                 byte[] prefix = ArrayUtils.subarray(nodeKey, 0, 12);
                 if(!Arrays.equals(prefix, DER_PREFIX))
-                	AgentError.create(AgentError.AgentErrorCode.DER_PREFIX_MISMATCH,DER_PREFIX,prefix);
+                    throw AgentError.create(AgentError.AgentErrorCode.DER_PREFIX_MISMATCH,DER_PREFIX,prefix);
                 
                 KeyFactory keyFactory = KeyFactory.getInstance("Ed25519");
                 
@@ -413,12 +428,12 @@ public final class Agent {
 					boolean verifies = sig.verify(signature.signature);
 					
 					if(!verifies)
-						AgentError.create(AgentError.AgentErrorCode.QUERY_SIGNATURE_VERIFICATION_FAILED);
+						throw AgentError.create(AgentError.AgentErrorCode.QUERY_SIGNATURE_VERIFICATION_FAILED);
 						
 				} catch (SignatureException e) {
-					AgentError.create(AgentError.AgentErrorCode.MALFORMED_SIGNATURE);
+					throw AgentError.create(AgentError.AgentErrorCode.MALFORMED_SIGNATURE, e);
 				} catch (InvalidKeyException e) {
-					AgentError.create(AgentError.AgentErrorCode.MALFORMED_PUBLIC_KEY);
+					throw AgentError.create(AgentError.AgentErrorCode.MALFORMED_PUBLIC_KEY, e);
 				} 
 			}
 			
@@ -429,6 +444,14 @@ public final class Agent {
 		
 	}
 	
+
+	void verifyTimestamp(long timestamp) {
+		Instant now = Instant.now();
+		Instant signedAt = Instant.ofEpochSecond(0, timestamp);
+		if(timestamp < 0 || signedAt.isBefore(now.minus(this.ingressExpiryDuration))
+				|| signedAt.isAfter(now.plusSeconds(DEFAULT_PERMITTED_DRIFT)))
+			throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_OUTDATED, this.ingressExpiryDuration.getSeconds());
+	}
 
 	public CompletableFuture<QueryResponse> queryEndpoint(Principal effectiveCanisterId, QueryContent request,boolean explicitVerifyQuerySignatures, Map<String,String> headers)
 			throws AgentError {
@@ -882,24 +905,23 @@ public final class Agent {
 		return response;
 	}	
 	
-	public Subnet getSubnet(Principal canisterId, Principal effectiveCanisterId) throws InterruptedException, ExecutionException, AgentError {
-		if(subnetCache.containsKey(canisterId))
-			return subnetCache.get(canisterId);
-		else
-		{
-
-			Subnet subnet = this.fetchSubnetByCanister(canisterId, effectiveCanisterId);
-			return subnet;
-		}
+	public synchronized Subnet getSubnet(Principal canisterId, Principal effectiveCanisterId) throws InterruptedException, ExecutionException, AgentError {
+		CachedSubnet cached = this.subnetCache.get(canisterId);
+		if(cached != null && cached.effectiveCanisterId.equals(effectiveCanisterId)
+				&& Instant.now().isBefore(cached.expiresAt))
+			return cached.subnet;
+		this.subnetCache.remove(canisterId);
+		return this.fetchSubnetByCanister(canisterId, effectiveCanisterId);
 	}
 	
-	public Subnet fetchSubnetByCanister(Principal canisterId, Principal effectiveCanisterId) throws InterruptedException, ExecutionException, AgentError {
+	public synchronized Subnet fetchSubnetByCanister(Principal canisterId, Principal effectiveCanisterId) throws InterruptedException, ExecutionException, AgentError {
 
 			Certificate certificate = this.fetchCertificate(canisterId, effectiveCanisterId, "controllers").get();
 			
 			Principal subnetId = getSubnetId(certificate, this.getRootKey());
 			Subnet subnet = this.fetchSubnet(subnetId, effectiveCanisterId).get().subnet;
-			subnetCache.put(canisterId, subnet);
+			subnetCache.put(canisterId, new CachedSubnet(subnet, effectiveCanisterId,
+					Instant.now().plus(this.ingressExpiryDuration)));
 			
 			return subnet;
 	}	
@@ -1022,7 +1044,15 @@ public final class Agent {
 	}
 
 	public void verify(Certificate certificate, Principal effectiveCanisterId, boolean disableRangeCheck) throws AgentError {
-		
+		this.verifyCertificate(certificate, effectiveCanisterId, disableRangeCheck);
+		this.verifyTimestamp(ResponseAuthentication.lookupTime(certificate));
+	}
+
+	private void verifyCertificate(Certificate certificate, Principal effectiveCanisterId, boolean disableRangeCheck) {
+		if(certificate == null || certificate.tree == null || certificate.signature == null
+				|| certificate.signature.length != 48)
+			throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_VERIFICATION_FAILED);
+
 		byte[] sig = certificate.signature;
 		
 		byte[] rootHash = certificate.tree.digest();
@@ -1059,7 +1089,9 @@ public final class Agent {
 				throw AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, e, delegation.get().certificate); 
 			}
 			
-			this.verify(certificate, effectiveCanisterId, disableRangeCheck);
+			if(certificate.delegation != null && certificate.delegation.isPresent())
+				throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED);
+			this.verifyCertificate(certificate, effectiveCanisterId, disableRangeCheck);
 			
 			List<Label> path = new ArrayList<Label>();
 			path.add(new Label("subnet"));			
@@ -1112,13 +1144,20 @@ public final class Agent {
 		for (Iterator<PrincipalRange> iterator = ranges.iterator(); iterator.hasNext();) {
 			PrincipalRange range = iterator.next();	
 
-			if(ByteUtils.compareByteArrays(principal.getValue(), range.low.getValue()) >= 0 && ByteUtils.compareByteArrays(principal.getValue(), range.high.getValue()) <= 0)
+			if(comparePrincipals(principal, range.low) >= 0 && comparePrincipals(principal, range.high) <= 0)
 				return true;
 		}
 		
 		return false;		
 	}
 	
+
+	private static int comparePrincipals(Principal first, Principal second) {
+		byte[] firstBytes = first.getValue();
+		byte[] secondBytes = second.getValue();
+		int comparison = ByteUtils.compareByteArrays(firstBytes, secondBytes);
+		return comparison != 0 ? comparison : Integer.compare(firstBytes.length, secondBytes.length);
+	}
 
 	public <T> CompletableFuture<StateResponse<T>> readStateEndpoint(Principal effectiveCanisterId, ReadStateContent request, Map<String,String> headers,
 			Class<T> clazz) throws AgentError {

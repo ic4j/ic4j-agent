@@ -30,6 +30,7 @@ import java.security.PublicKey;
 import java.security.Security;
 import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.Arrays;
 
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPrivateKey;
@@ -48,6 +49,8 @@ import org.slf4j.LoggerFactory;
 
 public final class Secp256k1Identity extends Identity {
 	static final Logger LOG = LoggerFactory.getLogger(Secp256k1Identity.class);
+	static final BigInteger CURVE_ORDER = new BigInteger("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16);
+	static final BigInteger HALF_CURVE_ORDER = CURVE_ORDER.shiftRight(1);
 
 	static JcaPEMKeyConverter jcaPemKeyConverter = new JcaPEMKeyConverter();
 
@@ -144,6 +147,14 @@ public final class Secp256k1Identity extends Identity {
 			dsa.update(content);
 
 			byte[] signature = dsa.sign();
+			BigInteger s = new BigInteger(1, Arrays.copyOfRange(signature, 32, 64));
+			if (s.compareTo(HALF_CURVE_ORDER) > 0) {
+				byte[] normalizedS = CURVE_ORDER.subtract(s).toByteArray();
+				int sourceOffset = Math.max(0, normalizedS.length - 32);
+				int length = normalizedS.length - sourceOffset;
+				Arrays.fill(signature, 32, 64, (byte) 0);
+				System.arraycopy(normalizedS, sourceOffset, signature, 64 - length, length);
+			}
 
 			return new Signature(this.derEncodedPublickey, signature, null);
 
