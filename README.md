@@ -115,6 +115,12 @@ ReplicaTransport transport = ReplicaOkHttpTransport.create("http://127.0.0.1:494
 
 The examples above use the default local DFX replica endpoint.
 
+Both HTTP transports limit replica response bodies to 16 MiB by default. Set the JVM
+system property `org.ic4j.agent.http.maxResponseBytes` to a positive byte count
+before creating a transport to change the limit. For example,
+`-Dorg.ic4j.agent.http.maxResponseBytes=33554432` permits responses up to 32 MiB.
+An invalid value causes transport creation to fail rather than disabling the limit.
+
 ## Agent Class
 
 Create Agent object
@@ -411,5 +417,4 @@ export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home
 export PATH="$JAVA_HOME/bin:$PATH"
 gradle clean test --console=plain
 ```
-
 

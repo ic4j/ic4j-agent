@@ -100,7 +100,6 @@ persistent actor {
     };           
 
     public shared query func echoPrincipal( value : Principal) : async Principal {
-    	Debug.print("Principal:" #Principal.toText(value));
         return value;
     };  
 

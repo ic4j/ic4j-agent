@@ -16,7 +16,9 @@
 
 package org.ic4j.agent.http;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashMap;
@@ -27,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.hc.client5.http.async.methods.SimpleHttpRequest;
+import org.apache.hc.client5.http.async.methods.SimpleRequestProducer;
 import org.apache.hc.client5.http.async.methods.SimpleHttpResponse;
 import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
 import org.apache.hc.client5.http.impl.async.HttpAsyncClients;
@@ -38,6 +41,11 @@ import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.HttpResponse;
+import org.apache.hc.core5.http.HttpException;
+import org.apache.hc.core5.http.nio.entity.AbstractBinAsyncEntityConsumer;
+import org.apache.hc.core5.http.nio.support.AbstractAsyncResponseConsumer;
+import org.apache.hc.core5.http.protocol.HttpContext;
 import org.apache.hc.core5.http.Method;
 import org.apache.hc.core5.pool.PoolConcurrencyPolicy;
 import org.apache.hc.core5.pool.PoolReusePolicy;
@@ -48,7 +56,6 @@ import org.ic4j.agent.AgentError;
 import org.ic4j.agent.ReplicaResponse;
 import org.ic4j.agent.ReplicaTransport;
 import org.ic4j.agent.requestid.RequestId;
-import org.ic4j.candid.ByteUtils;
 import org.ic4j.types.Principal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +68,7 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 
 	URI uri;
 	private final ContentType dfinityContentType = ContentType.create(ReplicaHttpProperties.DFINITY_CONTENT_TYPE);
+	private final int maxResponseBytes = ReplicaResponseLimit.configuredMaxBytes();
 
 	ReplicaApacheHttpTransport(URI url) {
 		this.uri = url;
@@ -206,38 +214,12 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 
 			CompletableFuture<ReplicaResponse> response = new CompletableFuture<ReplicaResponse>();
 
-			client.execute(httpRequest, new FutureCallback<SimpleHttpResponse>() {
+			client.execute(SimpleRequestProducer.create(httpRequest), new BoundedResponseConsumer(maxResponseBytes),
+				new FutureCallback<ReplicaResponse>() {
 
 				@Override
-				public void completed(SimpleHttpResponse httpResponse) {
-					try {
-						LOG.debug(requestUri + "->" + httpResponse.getCode());
-
-						ReplicaResponse replicaResponse = new ReplicaResponse();
-						byte[] bytes = httpResponse.getBodyBytes();
-						
-						replicaResponse.headers = new HashMap<String,String>();
-						
-						Header[] headers = httpResponse.getHeaders();
-						
-						for(Header header : headers)
-							replicaResponse.headers.put(header.getName(), header.getValue());			
-
-						if (bytes == null)
-							bytes = ArrayUtils.EMPTY_BYTE_ARRAY;
-						
-						int[] unsignedBytes = ByteUtils.toUnsignedIntegerArray(bytes);
-						
-						replicaResponse.payload = bytes;
-
-						response.complete(replicaResponse);						
-					}catch(Throwable t)
-					{
-						LOG.debug(requestUri + "->" + t);
-						response.completeExceptionally(
-								AgentError.create(AgentError.AgentErrorCode.HTTP_ERROR, t, t.getLocalizedMessage()));						
-					}
-
+				public void completed(ReplicaResponse replicaResponse) {
+					response.complete(replicaResponse);
 				}
 
 				@Override
@@ -264,6 +246,67 @@ public class ReplicaApacheHttpTransport implements ReplicaTransport {
 
 	}
 	
+	private static final class BoundedResponseConsumer
+			extends AbstractAsyncResponseConsumer<ReplicaResponse, byte[]> {
+		BoundedResponseConsumer(int maxResponseBytes) {
+			super(new BoundedEntityConsumer(maxResponseBytes));
+		}
+
+		@Override
+		public void informationResponse(HttpResponse response, HttpContext context)
+				throws HttpException, IOException {
+		}
+
+		@Override
+		protected ReplicaResponse buildResult(HttpResponse response, byte[] body, ContentType contentType) {
+			ReplicaResponse result = new ReplicaResponse();
+			result.payload = body == null ? ArrayUtils.EMPTY_BYTE_ARRAY : body;
+			result.headers = new HashMap<>();
+			for (Header header : response.getHeaders())
+				result.headers.put(header.getName(), header.getValue());
+			return result;
+		}
+	}
+
+	private static final class BoundedEntityConsumer extends AbstractBinAsyncEntityConsumer<byte[]> {
+		private final ByteArrayOutputStream output = new ByteArrayOutputStream();
+		private final int maxResponseBytes;
+
+		BoundedEntityConsumer(int maxResponseBytes) {
+			this.maxResponseBytes = maxResponseBytes;
+		}
+
+		@Override
+		protected void streamStart(ContentType contentType) {
+		}
+
+		@Override
+		protected int capacityIncrement() {
+			return 8192;
+		}
+
+		@Override
+		protected void data(ByteBuffer src, boolean endOfStream) throws IOException {
+			ReplicaResponseLimit.check(output.size(), src.remaining(), maxResponseBytes);
+			byte[] chunk = new byte[Math.min(8192, src.remaining())];
+			while (src.hasRemaining()) {
+				int count = Math.min(src.remaining(), chunk.length);
+				src.get(chunk, 0, count);
+				output.write(chunk, 0, count);
+			}
+		}
+
+		@Override
+		protected byte[] generateContent() {
+			return output.toByteArray();
+		}
+
+		@Override
+		public void releaseResources() {
+			output.reset();
+		}
+	}
+
 	public void close()
 	{	
 		if(this.client != null)

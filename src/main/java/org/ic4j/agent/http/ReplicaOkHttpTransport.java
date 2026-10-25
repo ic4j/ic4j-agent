@@ -17,6 +17,7 @@
 package org.ic4j.agent.http;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashMap;
@@ -54,6 +55,7 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 	URI uri;
 	
 	private final MediaType dfinityContentType = MediaType.parse(ReplicaHttpProperties.DFINITY_CONTENT_TYPE);
+	private final int maxResponseBytes = ReplicaResponseLimit.configuredMaxBytes();
 
 	ReplicaOkHttpTransport(URI url) {
 		
@@ -190,9 +192,12 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 							replicaResponse.headers.put(name, headers.get(name));
 						}
 						
-						bytes = httpResponse.body().bytes();
-						if (bytes == null)
+						if (httpResponse.body() == null)
 							bytes = ArrayUtils.EMPTY_BYTE_ARRAY;
+						else
+							try (InputStream body = httpResponse.body().byteStream()) {
+								bytes = ReplicaResponseLimit.read(body, maxResponseBytes);
+							}
 						
 						replicaResponse.payload = bytes;
 
@@ -201,6 +206,8 @@ public class ReplicaOkHttpTransport implements ReplicaTransport {
 						LOG.debug(requestUri + "->" + t);
 						response.completeExceptionally(
 								AgentError.create(AgentError.AgentErrorCode.HTTP_ERROR, t, t.getLocalizedMessage()));
+					} finally {
+						httpResponse.close();
 					}
 
 				}

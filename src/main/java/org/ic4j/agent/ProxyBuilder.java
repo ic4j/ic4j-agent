@@ -534,6 +534,7 @@ public final class ProxyBuilder {
 						CompletableFuture<Object> response = new CompletableFuture();
 
 						builderResponse.whenComplete((input, ex) -> {
+				try {
 							if (ex == null) {
 								if (input != null) {
 									IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
@@ -560,6 +561,9 @@ public final class ProxyBuilder {
 											.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
 							} else
 								response.completeExceptionally(ex);
+				} catch (Throwable t) {
+					response.completeExceptionally(t);
+				}
 						});
 						return response;
 					} else {
@@ -636,6 +640,7 @@ public final class ProxyBuilder {
 						disableRangeCheck, waiter);
 
 				builderResponse.whenComplete((input, ex) -> {
+				try {
 					if (ex == null) {
 						if (input != null) {
 							IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
@@ -693,6 +698,9 @@ public final class ProxyBuilder {
 									AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, ex));
 					}
 
+				} catch (Throwable t) {
+					response.completeExceptionally(t);
+				}
 				});
 				return response;
 			}
@@ -783,6 +791,7 @@ public final class ProxyBuilder {
 					CompletableFuture<Object> response = new CompletableFuture();
 
 					builderResponse.whenComplete((input, ex) -> {
+				try {
 						if (ex == null) {
 							if (input != null) {
 								IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
@@ -815,6 +824,9 @@ public final class ProxyBuilder {
 										.create(AgentError.AgentErrorCode.CUSTOM_ERROR, "Missing return value"));
 						} else
 							response.completeExceptionally(ex);
+				} catch (Throwable t) {
+					response.completeExceptionally(t);
+				}
 					});
 					return (T) response;
 				} else {
@@ -898,6 +910,7 @@ public final class ProxyBuilder {
 
 			if (responseClass != null && responseClass.equals(CompletableFuture.class)) {
 				builderResponse.whenComplete((input, ex) -> {
+				try {
 					if (ex == null) {
 						if (input != null) {
 							IDLArgs outArgs = IDLArgs.fromBytes(input.getPayload());
@@ -961,6 +974,9 @@ public final class ProxyBuilder {
 									AgentError.create(AgentError.AgentErrorCode.CUSTOM_ERROR, ex));
 					}
 	
+				} catch (Throwable t) {
+					response.completeExceptionally(t);
+				}
 				});
 				return (T) response;
 			} else {

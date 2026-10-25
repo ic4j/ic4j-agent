@@ -292,32 +292,17 @@ public final class Agent {
 		else
 			queryContent.queryRequest.ingressExpiry = this.getExpiryDate();
 
-		CompletableFuture<Response<byte[]>> response = new CompletableFuture<Response<byte[]>>();
-
-		this.queryEndpoint(effectiveCanisterId, queryContent,explicitVerifyQuerySignatures, request.getHeaders()).whenComplete((input, ex) -> {
-			if (ex == null) {
-				if (input != null) {
-					if (input.replied.isPresent()) {
-											
-						byte[] out = input.replied.get().arg;
-						
-						Response<byte[]> queryResponse = new Response<byte[]>(out, input.headers);
-						response.complete(queryResponse);
-					} else if (input.rejected.isPresent()) {
-						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.REPLICA_ERROR,
-								input.rejected.get().rejectCode, input.rejected.get().rejectMessage));
-					} else
-						response.completeExceptionally(
-								AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS));
-
-				} else {
-					response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS));
-				}
-			} else {
-				response.completeExceptionally(ex);
-			}
+		return this.queryEndpoint(effectiveCanisterId, queryContent, explicitVerifyQuerySignatures,
+				request.getHeaders()).thenApply(input -> {
+			if (input == null || input.replied == null || input.rejected == null)
+				throw AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS);
+			if (input.replied.isPresent())
+				return new Response<byte[]>(input.replied.get().arg, input.headers);
+			if (input.rejected.isPresent())
+				throw AgentError.create(AgentError.AgentErrorCode.REPLICA_ERROR,
+						input.rejected.get().rejectCode, input.rejected.get().rejectMessage);
+			throw AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS);
 		});
-		return response;
 	}	
 
 	public CompletableFuture<byte[]> queryRaw(Principal canisterId, Principal effectiveCanisterId, String method,
@@ -340,29 +325,17 @@ public final class Agent {
 		else
 			queryContent.queryRequest.ingressExpiry = this.getExpiryDate();
 
-		CompletableFuture<byte[]> response = new CompletableFuture<byte[]>();
-
-		this.queryEndpoint(effectiveCanisterId, queryContent,explicitVerifyQuerySignatures, null).whenComplete((input, ex) -> {
-			if (ex == null) {
-				if (input != null) {
-					if (input.replied.isPresent()) {	
-						byte[] out = input.replied.get().arg;
-						response.complete(out);
-					} else if (input.rejected.isPresent()) {
-						response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.REPLICA_ERROR,
-								input.rejected.get().rejectCode, input.rejected.get().rejectMessage));
-					} else
-						response.completeExceptionally(
-								AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS));
-
-				} else {
-					response.completeExceptionally(AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS));
-				}
-			} else {
-				response.completeExceptionally(ex);
-			}
+		return this.queryEndpoint(effectiveCanisterId, queryContent, explicitVerifyQuerySignatures,
+				null).thenApply(input -> {
+			if (input == null || input.replied == null || input.rejected == null)
+				throw AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS);
+			if (input.replied.isPresent())
+				return input.replied.get().arg;
+			if (input.rejected.isPresent())
+				throw AgentError.create(AgentError.AgentErrorCode.REPLICA_ERROR,
+						input.rejected.get().rejectCode, input.rejected.get().rejectMessage);
+			throw AgentError.create(AgentError.AgentErrorCode.INVALID_REPLICA_STATUS);
 		});
-		return response;
 	}
 	
 	public void verifySignatures(QueryResponse response, Principal effectiveCanisterId, RequestId requestId) throws AgentError {

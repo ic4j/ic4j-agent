@@ -190,10 +190,10 @@ public class ICTest {
 
 			// test signed query with error
 			try {
-				String peekCanisterError = "ofoea-eyaaa-aaaab-qab6a-cai";
+				Principal canister = Principal.fromString(TestProperties.IC_CANISTER_ID);
 
-				queryResponse = agent.queryRaw(Principal.fromString(peekCanisterError),
-						Principal.fromString(peekCanisterError), "peek", buf, Optional.empty(), true);
+				queryResponse = agent.queryRaw(canister,
+						canister, "missingMethod", buf, Optional.empty(), true);
 
 				byte[] queryOutput = queryResponse.get();
 
@@ -208,10 +208,8 @@ public class ICTest {
 
 				if (causeEx != null && causeEx instanceof AgentError)
 				{
-					AgentError.AgentErrorCode expectedCode = TestProperties.isLocalReplicaUrl(TestProperties.IC_URL)
-							? AgentError.AgentErrorCode.MESSAGE_ERROR
-							: AgentError.AgentErrorCode.REPLICA_ERROR;
-					Assertions.assertEquals(expectedCode, (((AgentError) causeEx).getCode()));
+					Assertions.assertEquals(AgentError.AgentErrorCode.REPLICA_ERROR,
+							(((AgentError) causeEx).getCode()));
 				}
 				else
 					Assertions.fail(ex.getLocalizedMessage());

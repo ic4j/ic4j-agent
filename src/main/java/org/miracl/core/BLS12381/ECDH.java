@@ -252,6 +252,8 @@ public final class ECDH {
     public static byte[] ECIES_ENCRYPT(int sha, byte[] P1, byte[] P2, RAND RNG, byte[] W, byte[] M, byte[] V, byte[] T) {
         int i, len;
 
+        if ((sha != 32 && sha != 48 && sha != 64) || T == null || T.length != sha) return new byte[0];
+
         byte[] Z = new byte[EFS];
         byte[] VZ = new byte[3 * EFS + 1];
         byte[] K1 = new byte[CONFIG_CURVE.AESKEY];
@@ -301,7 +303,9 @@ public final class ECDH {
         byte[] VZ = new byte[3 * EFS + 1];
         byte[] K1 = new byte[CONFIG_CURVE.AESKEY];
         byte[] K2 = new byte[CONFIG_CURVE.AESKEY];
-        byte[] TAG = new byte[T.length];
+        if ((sha != 32 && sha != 48 && sha != 64) || T == null || T.length != sha)
+            return new byte[0];
+        byte[] TAG = new byte[sha];
 
         if (SVDP_DH(U, V, Z, 0) != 0) return new byte[0];
 
@@ -312,10 +316,6 @@ public final class ECDH {
 
         for (i = 0; i < CONFIG_CURVE.AESKEY; i++) {K1[i] = K[i]; K2[i] = K[CONFIG_CURVE.AESKEY + i];}
 
-        byte[] M = AES.CBC_IV0_DECRYPT(K1, C);
-
-        if (M.length == 0) return M;
-
         byte[] L2 = HMAC.inttoBytes(P2.length, 8);
 
         byte[] AC = new byte[C.length + P2.length + 8];
@@ -324,8 +324,9 @@ public final class ECDH {
         for (i = 0; i < P2.length; i++) AC[C.length + i] = P2[i];
         for (i = 0; i < 8; i++) AC[C.length + P2.length + i] = L2[i];
 
-        HMAC.HMAC1(HMAC.MC_SHA2, sha, TAG, TAG.length, K2, AC);
-        if (!ncomp(T, TAG, T.length)) return new byte[0];
-        return M;
+        if (HMAC.HMAC1(HMAC.MC_SHA2, sha, TAG, TAG.length, K2, AC) != 1
+                || !ncomp(T, TAG, sha))
+            return new byte[0];
+        return AES.CBC_IV0_DECRYPT(K1, C);
     }
 }
