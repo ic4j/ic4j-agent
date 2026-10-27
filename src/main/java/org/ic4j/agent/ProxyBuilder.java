@@ -162,7 +162,7 @@ public final class ProxyBuilder {
 	 * The Duration is converted to nanoseconds and stored in ingressExpiryDatetime
 	 */
 	public ProxyBuilder expireAt(LocalDateTime time) {
-		this.ingressExpiryDatetime = Optional.of(time.toEpochSecond(ZoneOffset.UTC));
+		this.ingressExpiryDatetime = Optional.of(IngressExpiry.toEpochNanos(time.toInstant(ZoneOffset.UTC)));
 
 		return this;
 	}
@@ -178,8 +178,7 @@ public final class ProxyBuilder {
 	public ProxyBuilder expireAfter(Duration duration) {
 		Duration permittedDrift = Duration.ofSeconds(Agent.DEFAULT_PERMITTED_DRIFT);
 
-		this.ingressExpiryDatetime = Optional
-				.of((Duration.ofMillis(System.currentTimeMillis()).plus(duration).minus(permittedDrift)).toNanos());
+		this.ingressExpiryDatetime = Optional.of(IngressExpiry.after(duration, permittedDrift));
 
 		return this;
 	}

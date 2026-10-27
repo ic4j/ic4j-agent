@@ -80,7 +80,7 @@ public final class UpdateBuilder {
   	*/
 	public UpdateBuilder expireAt(LocalDateTime time) 
 	{	
-		this.ingressExpiryDatetime = Optional.of(time.toEpochSecond(ZoneOffset.UTC));
+		this.ingressExpiryDatetime = Optional.of(IngressExpiry.toEpochNanos(time.toInstant(ZoneOffset.UTC)));
 				
 		return this;		
 	}
@@ -93,9 +93,8 @@ public final class UpdateBuilder {
 	
 	public UpdateBuilder expireAfter(Duration duration) 
 	{
-		Duration permittedDrift = Duration.ofSeconds(Agent.DEFAULT_PERMITTED_DRIFT);
-
-		this.ingressExpiryDatetime =  Optional.of((Duration.ofMillis(System.currentTimeMillis()).minus(permittedDrift)).toNanos());
+		this.ingressExpiryDatetime = Optional.of(IngressExpiry.after(duration,
+				Duration.ofSeconds(Agent.DEFAULT_PERMITTED_DRIFT)));
 		
 		return this;
 	}

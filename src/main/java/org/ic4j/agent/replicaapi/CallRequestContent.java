@@ -43,7 +43,7 @@ public final class CallRequestContent implements Serialize {
 	{
 		@JsonProperty("nonce")
 		@JsonInclude(JsonInclude.Include.NON_ABSENT)
-		public Optional<byte[]> nonce;
+		public Optional<byte[]> nonce = Optional.empty();
 		@JsonProperty("ingress_expiry")
 		public Long ingressExpiry;		
 		@JsonProperty("sender")

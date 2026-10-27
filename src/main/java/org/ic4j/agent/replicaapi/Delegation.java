@@ -52,6 +52,13 @@ public final class Delegation implements Serialize{
 	@JsonProperty("targets")
 	@JsonInclude(JsonInclude.Include.NON_ABSENT)
 	public List<Principal> targets;	
+
+	// Restricts the delegation to query and read_state requests when set to "queries".
+	@Name("permissions")
+	@Field(Type.TEXT)
+	@JsonProperty("permissions")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public String permissions;
 	
 	
     public Delegation() {
@@ -59,10 +66,15 @@ public final class Delegation implements Serialize{
 	}
 
 	public Delegation(long expiration,byte[] pubKey, List<Principal> targets) {
+		this(expiration, pubKey, targets, null);
+	}
+
+	public Delegation(long expiration, byte[] pubKey, List<Principal> targets, String permissions) {
 		super();
 		this.pubKey = pubKey;
 		this.expiration = expiration;
 		this.targets = targets;
+		this.permissions = permissions;
 	}
 
 	// Returns the signable form of the delegation, by running it through [`to_request_id`]
@@ -81,9 +93,12 @@ public final class Delegation implements Serialize{
 	@Override
 	public void serialize(Serializer serializer) {
 		serializer.serializeField("pubkey", pubKey);
+		serializer.serializeField("expiration", expiration);
 		
 		if(targets != null)
 			serializer.serializeField("targets", targets);
+		if(permissions != null)
+			serializer.serializeField("permissions", permissions);
 		
 	}
 

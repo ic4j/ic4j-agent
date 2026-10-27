@@ -17,6 +17,7 @@
 package org.ic4j.agent.replicaapi;
 
 import java.util.Optional;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -35,5 +36,9 @@ public final class Envelope<T> {
 	@JsonProperty("sender_sig")
 	@JsonInclude(JsonInclude.Include.NON_ABSENT)
 	public Optional<byte[]> senderSig;	
+
+	@JsonProperty("sender_delegation")
+	@JsonInclude(JsonInclude.Include.NON_ABSENT)
+	public Optional<List<SignedDelegation>> senderDelegation;
 
 }

@@ -18,6 +18,7 @@ package org.ic4j.agent.requestid;
 
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -68,7 +69,7 @@ public final class RequestIdSerializer implements Serializer {
 		else if (value instanceof byte[])
 			bytes = (byte[]) value;
 		else
-			bytes = value.toString().getBytes();
+			bytes = value.toString().getBytes(StandardCharsets.UTF_8);
 
 		byte[] result	= DigestUtils.sha256(bytes);
 		

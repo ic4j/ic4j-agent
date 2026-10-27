@@ -67,18 +67,57 @@ task fatJar(type: Jar) {
 
 test {
     useJUnitPlatform()
-    
-    //exclude '**/*ICTest*'
-    //exclude '**/*LoanTest*'
+
+    // Replica-bound tests are opt-in. Keep the standard test task deterministic and offline.
+    exclude '**/ICTest.class'
+    exclude '**/*ReplicaTest.class'
+    exclude '**/LoanTest.class'
+    exclude '**/IdentityTest.class'
+    exclude '**/QueryTest.class'
+    exclude '**/UpdateTest.class'
+    exclude '**/StatusTest.class'
     exclude '**/*TradingTest*'
+}
+
+tasks.register('liveIntegrationTest', Test) {
+    description = 'Runs tests that contact replicas, public canisters, or other external services.'
+    group = 'verification'
+    onlyIf { project.hasProperty('ic4j.liveTests') }
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    include '**/ICTest.class'
+    include '**/*ReplicaTest.class'
+    include '**/LoanTest.class'
+    include '**/IdentityTest.class'
+    include '**/QueryTest.class'
+    include '**/UpdateTest.class'
+    include '**/StatusTest.class'
+}
+
+tasks.register('offlineProtocolTest', Test) {
+    description = 'Runs deterministic offline protocol compatibility and security tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    include '**/AgentSecurityTest.class'
+    include '**/AgentUpdateTest.class'
+    include '**/DelegationCompatibilityTest.class'
+    include '**/IngressExpiryTest.class'
+    include '**/ProposedSecurityFixTest.class'
+    include '**/RequestIdTest.class'
+    include '**/ResponseAuthenticationTest.class'
+    include '**/HashTreeTest.class'
+    include '**/ReplicaResponseLimitTest.class'
 }
 
 dependencies {
 	// https://mvnrepository.com/artifact/org.slf4j/slf4j-api
-	compileOnly group: 'org.slf4j', name: 'slf4j-api', version: '2.0.17'	
+	compileOnly group: 'org.slf4j', name: 'slf4j-api', version: '2.0.20'
 	
 	// https://mvnrepository.com/artifact/org.apache.httpcomponents.client5/httpclient5
-	compileOnly group: 'org.apache.httpcomponents.client5', name: 'httpclient5', version: '5.6.4'
+	compileOnly group: 'org.apache.httpcomponents.client5', name: 'httpclient5', version: '5.6.5'
 	
 	// https://mvnrepository.com/artifact/com.squareup.okhttp3/okhttp
 	compileOnly group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0'	
@@ -86,40 +125,40 @@ dependencies {
 	implementation group: 'org.ic4j', name: 'ic4j-candid', version: '0.8.5'
 	
 	// https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
-	implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
+	implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.21.0'
 	
 	// https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind
-	implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.22.2'
+	implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.22.4'
 	
 	// https://mvnrepository.com/artifact/com.fasterxml.jackson.datatype/jackson-datatype-jdk8
-	implementation group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jdk8', version: '2.22.2'
+	implementation group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jdk8', version: '2.22.4'
 	
 	// https://mvnrepository.com/artifact/com.fasterxml.jackson.dataformat/jackson-dataformat-cbor
-	implementation group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-cbor', version: '2.22.2'
+	implementation group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-cbor', version: '2.22.4'
 
 	// https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk18on
-	implementation group: 'org.bouncycastle', name: 'bcprov-jdk18on', version: '1.83'
+	implementation group: 'org.bouncycastle', name: 'bcprov-jdk18on', version: '1.86'
 
 	// https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk18on
-	implementation group: 'org.bouncycastle', name: 'bcpkix-jdk18on', version: '1.83'
+	implementation group: 'org.bouncycastle', name: 'bcpkix-jdk18on', version: '1.86'
 
 	// https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter-api
-	testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: '5.12.2'
+	testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: '5.14.4'
 	
 	// https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter-engine
-	testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: '5.12.2'
+	testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: '5.14.4'
 
 	// https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter-params
-	testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-params', version: '5.12.2'
+	testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-params', version: '5.14.4'
 	
 	// https://mvnrepository.com/artifact/org.junit.platform/junit-platform-launcher
-	testImplementation group: 'org.junit.platform', name: 'junit-platform-launcher', version: '1.12.2'	
+	testImplementation group: 'org.junit.platform', name: 'junit-platform-launcher', version: '1.14.4'
 	
 	// https://mvnrepository.com/artifact/org.slf4j/slf4j-simple
-	testImplementation group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.17'	
+	testImplementation group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.20'
 	
 	// https://mvnrepository.com/artifact/org.apache.httpcomponents.client5/httpclient5
-	testImplementation group: 'org.apache.httpcomponents.client5', name: 'httpclient5', version: '5.6.4'
+	testImplementation group: 'org.apache.httpcomponents.client5', name: 'httpclient5', version: '5.6.5'
 	
 	// https://mvnrepository.com/artifact/com.squareup.okhttp3/okhttp
 	testImplementation group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0'		

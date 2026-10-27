@@ -31,10 +31,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -55,6 +57,7 @@ import org.ic4j.agent.replicaapi.QueryContent;
 import org.ic4j.agent.replicaapi.QueryResponse;
 import org.ic4j.agent.replicaapi.ReadStateContent;
 import org.ic4j.agent.replicaapi.ReadStateResponse;
+import org.ic4j.agent.replicaapi.SignedDelegation;
 import org.ic4j.agent.requestid.RequestId;
 import org.ic4j.candid.ByteUtils;
 import org.ic4j.types.Principal;
@@ -150,11 +153,7 @@ public final class Agent {
 	}
 
 	Long getExpiryDate() {
-		// TODO: evaluate if we need this on the agent side
-		Duration permittedDrift = Duration.ofSeconds(DEFAULT_PERMITTED_DRIFT);
-
-		return ((this.ingressExpiryDuration.plus(Duration.ofMillis(System.currentTimeMillis()))).minus(permittedDrift))
-				.toNanos();
+		return IngressExpiry.after(this.ingressExpiryDuration, Duration.ofSeconds(DEFAULT_PERMITTED_DRIFT));
 	}
 
 	/*
@@ -211,6 +210,53 @@ public final class Agent {
 
 	byte[] constructMessage(RequestId requestId) {
 		return ArrayUtils.addAll(IC_REQUEST_DOMAIN_SEPARATOR, requestId.get());
+	}
+
+	static void validateDelegations(Signature signature, Principal targetCanister, String requestType) {
+		if (signature == null || signature.delegations == null || !signature.delegations.isPresent())
+			return;
+
+		List<SignedDelegation> delegations = signature.delegations.get();
+		if (delegations.size() > 20)
+			throw AgentError.create(AgentError.AgentErrorCode.AUTHENTICATION_ERROR, "delegation chain exceeds 20 entries");
+
+		Set<String> publicKeys = new HashSet<>();
+		if (signature.publicKey != null && signature.publicKey.isPresent())
+			publicKeys.add(Hex.encodeHexString(signature.publicKey.get()));
+
+		for (SignedDelegation signed : delegations) {
+			if (signed == null || signed.delegation == null || signed.delegation.pubKey == null
+					|| signed.signature == null)
+				throw AgentError.create(AgentError.AgentErrorCode.AUTHENTICATION_ERROR, "malformed delegation");
+
+			org.ic4j.agent.replicaapi.Delegation delegation = signed.delegation;
+			if (!publicKeys.add(Hex.encodeHexString(delegation.pubKey)))
+				throw AgentError.create(AgentError.AgentErrorCode.AUTHENTICATION_ERROR,
+						"delegation chain contains a repeated public key");
+
+			if (delegation.expiration <= 0 || !Instant.now().isBefore(Instant.ofEpochSecond(0, delegation.expiration)))
+				throw AgentError.create(AgentError.AgentErrorCode.AUTHENTICATION_ERROR, "delegation has expired");
+
+			if (delegation.targets != null) {
+				if (delegation.targets.size() > 1000)
+					throw AgentError.create(AgentError.AgentErrorCode.AUTHENTICATION_ERROR,
+							"delegation has more than 1000 targets");
+				if (targetCanister != null && !delegation.targets.contains(targetCanister))
+					throw AgentError.create(AgentError.AgentErrorCode.AUTHENTICATION_ERROR,
+							"delegation does not authorize the target canister");
+			}
+
+			if (delegation.permissions != null) {
+				if ("queries".equals(delegation.permissions)) {
+					if ("call".equals(requestType))
+						throw AgentError.create(AgentError.AgentErrorCode.AUTHENTICATION_ERROR,
+								"query-only delegation cannot authorize call requests");
+				} else if (!"all".equals(delegation.permissions)) {
+					throw AgentError.create(AgentError.AgentErrorCode.AUTHENTICATION_ERROR,
+							"unsupported delegation permission");
+				}
+			}
+		}
 	}
 
 	/*
@@ -434,6 +480,7 @@ public final class Agent {
 		byte[] msg = this.constructMessage(requestId);
 
 		Signature signature = this.identity.sign(msg);
+		this.validateDelegations(signature, request.queryRequest.canisterId, "query");
 
 		ObjectMapper objectMapper = new ObjectMapper(new CBORFactory()).registerModule(new Jdk8Module());
 
@@ -444,6 +491,7 @@ public final class Agent {
 		envelope.content = request;
 		envelope.senderPubkey = signature.publicKey;
 		envelope.senderSig = signature.signature;
+		envelope.senderDelegation = signature.delegations;
 
 		byte[] bytes = null;
 		try {
@@ -589,6 +637,7 @@ public final class Agent {
 		byte[] msg = this.constructMessage(requestId);
 
 		Signature signature = this.identity.sign(msg);
+		this.validateDelegations(signature, request.callRequest.canisterId, "call");
 
 		ObjectMapper objectMapper = new ObjectMapper(new CBORFactory()).registerModule(new Jdk8Module());
 
@@ -599,6 +648,7 @@ public final class Agent {
 		envelope.content = request;
 		envelope.senderPubkey = signature.publicKey;
 		envelope.senderSig = signature.signature;
+		envelope.senderDelegation = signature.delegations;
 
 		byte[] bytes = null;
 		try {
@@ -913,6 +963,11 @@ public final class Agent {
 		path.add(subnetId.getValue());
 		paths.add(path);
 
+		List<byte[]> rangePath = new ArrayList<byte[]>();
+		rangePath.add("canister_ranges".getBytes(StandardCharsets.UTF_8));
+		rangePath.add(subnetId.getValue());
+		paths.add(rangePath);
+
 		CompletableFuture<SubnetResponse> response = new CompletableFuture<SubnetResponse>();
 
 		this.readStateRaw(effectiveCanisterId, paths,disableRangeCheck, null).whenComplete((input, ex) -> {
@@ -1066,42 +1121,12 @@ public final class Agent {
 				throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED);
 			this.verifyCertificate(certificate, effectiveCanisterId, disableRangeCheck);
 			
+			List<PrincipalRange> ranges = ResponseAuthentication.lookupCanisterRanges(certificate,
+					Principal.from(delegation.get().subnetId), effectiveCanisterId);
+			if (!disableRangeCheck && !this.principalIsWithinRanges(effectiveCanisterId, ranges))
+				throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED);
+
 			List<Label> path = new ArrayList<Label>();
-			path.add(new Label("subnet"));			
-			path.add(new Label(delegation.get().subnetId));
-			path.add(new Label("canister_ranges"));
-			
-			byte[] canisterRange = ResponseAuthentication.lookupValue(certificate,path);
-			
-			try {	
-				
-				TypeReference<HashMap<Principal, Principal>> typeRef 
-				  = new TypeReference<HashMap<Principal, Principal>>() {};
-				
-				List<PrincipalRange> ranges =  new ArrayList <> ();
-				
-				List<List<byte[]>> rangesJson = new ArrayList <> ();
-						
-				rangesJson = objectMapper.readValue(canisterRange, List.class);
-				
-				for (Iterator <List<byte[]>> iterator = rangesJson.iterator(); iterator.hasNext();) {
-					List<byte[]> rangeJson = (List<byte[]>) iterator.next();
-					
-					PrincipalRange range = new PrincipalRange();
-					
-					range.low = Principal.from(rangeJson.get(0));
-					range.high = Principal.from(rangeJson.get(1));
-					ranges.add(range);
-			    }
-				
-				if(!disableRangeCheck && ! this.principalIsWithinRanges(effectiveCanisterId, ranges))
-					throw AgentError.create(AgentError.AgentErrorCode.CERTIFICATE_NOT_AUTHORIZED); 
-						
-			} catch (Exception e) {
-				throw AgentError.create(AgentError.AgentErrorCode.INVALID_CBOR_DATA, e, canisterRange.toString()); 
-			}
-			
-			path = new ArrayList<Label>();
 			path.add(new Label("subnet"));			
 			path.add(new Label(delegation.get().subnetId));
 			path.add(new Label("public_key"));
@@ -1140,6 +1165,7 @@ public final class Agent {
 		byte[] msg = this.constructMessage(requestId);
 
 		Signature signature = this.identity.sign(msg);
+		this.validateDelegations(signature, null, "read_state");
 
 		ObjectMapper objectMapper = new ObjectMapper(new CBORFactory()).registerModule(new Jdk8Module());
 
@@ -1150,6 +1176,7 @@ public final class Agent {
 		envelope.content = request;
 		envelope.senderPubkey = signature.publicKey;
 		envelope.senderSig = signature.signature;
+		envelope.senderDelegation = signature.delegations;
 
 		byte[] bytes = null;
 		try {

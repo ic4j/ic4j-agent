@@ -39,20 +39,17 @@ public final class DelegatedIdentity extends Identity {
 
 	public DelegatedIdentity(Identity identity, byte[] derEncodedPublickey, List<SignedDelegation> chain) {
 		this.to = identity;
-		this.derEncodedPublickey = derEncodedPublickey;
-		this.chain = chain;
+		this.derEncodedPublickey = derEncodedPublickey == null ? null : derEncodedPublickey.clone();
+		this.chain = chain == null ? new ArrayList<SignedDelegation>() : new ArrayList<SignedDelegation>(chain);
 	}
 	
 	Signature chainSignature(Signature sig)
 	{
 		sig.publicKey = Optional.of(this.derEncodedPublickey);
 		
-		List<SignedDelegation> chain;
-		
-		if(sig.delegations == null || !sig.delegations.isPresent())
-			chain = new ArrayList<SignedDelegation>();
-		else
-			chain = sig.delegations.get();
+		List<SignedDelegation> chain = new ArrayList<SignedDelegation>();
+		if(sig.delegations != null && sig.delegations.isPresent())
+			chain.addAll(sig.delegations.get());
 		
 		for(SignedDelegation delegation : this.chain)
 			chain.add(delegation);
@@ -90,12 +87,10 @@ public final class DelegatedIdentity extends Identity {
 	
 	@Override
 	public List<SignedDelegation> delegationChain() {
-		List<SignedDelegation> chain;
-		
-		if(to.delegationChain() == null)
-			chain = new ArrayList<SignedDelegation>();
-		else
-			chain = to.delegationChain();
+		List<SignedDelegation> chain = new ArrayList<SignedDelegation>();
+		List<SignedDelegation> innerChain = to.delegationChain();
+		if(innerChain != null)
+			chain.addAll(innerChain);
 		
 		for(SignedDelegation delegation : this.chain)
 			chain.add(delegation);

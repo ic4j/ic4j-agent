@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -183,6 +184,117 @@ public class AgentSecurityTest {
 	}
 
 	@Test
+	void acceptsShardedCanisterRangesAndRejectsOutsideBoundary() throws Exception {
+		byte[] subnetId = new byte[] {1};
+		Principal low = Principal.from(new byte[] {0x10});
+		Principal firstHigh = Principal.from(new byte[] {0x1f});
+		Principal secondLow = Principal.from(new byte[] {0x20});
+		Principal high = Principal.from(new byte[] {0x2f});
+		byte[] firstShard = mapper().writeValueAsBytes(Collections.singletonList(
+				Arrays.asList(low.getValue(), firstHigh.getValue())));
+		byte[] secondShard = mapper().writeValueAsBytes(Collections.singletonList(
+				Arrays.asList(secondLow.getValue(), high.getValue())));
+		Object shardTree = Arrays.asList(1, label(low.getValue(), leaf(firstShard)),
+				label(secondLow.getValue(), leaf(secondShard)));
+		Object tree = label("canister_ranges", label("\u0001", shardTree));
+		Certificate certificate = new Certificate();
+		certificate.tree = mapper().readValue(mapper().writeValueAsBytes(Collections.singletonMap("tree", tree)),
+				Certificate.class).tree;
+		List<PrincipalRange> ranges = ResponseAuthentication.lookupCanisterRanges(certificate,
+				Principal.from(subnetId));
+		Assertions.assertEquals(2, ranges.size());
+		Assertions.assertEquals(low, ranges.get(0).low);
+		Assertions.assertEquals(firstHigh, ranges.get(0).high);
+		Assertions.assertEquals(secondLow, ranges.get(1).low);
+		Assertions.assertEquals(high, ranges.get(1).high);
+		Assertions.assertTrue(agent.principalIsWithinRanges(low, ranges));
+		Assertions.assertTrue(agent.principalIsWithinRanges(firstHigh, ranges));
+		Assertions.assertTrue(agent.principalIsWithinRanges(secondLow, ranges));
+		Assertions.assertTrue(agent.principalIsWithinRanges(high, ranges));
+		Assertions.assertFalse(agent.principalIsWithinRanges(Principal.from(new byte[] {0x30}), ranges));
+		Assertions.assertTrue(agent.principalIsWithinRanges(firstHigh,
+				ResponseAuthentication.lookupCanisterRanges(certificate, Principal.from(subnetId), firstHigh)));
+		Assertions.assertTrue(agent.principalIsWithinRanges(low,
+				ResponseAuthentication.lookupCanisterRanges(certificate, Principal.from(subnetId), low)));
+		Assertions.assertTrue(agent.principalIsWithinRanges(secondLow,
+				ResponseAuthentication.lookupCanisterRanges(certificate, Principal.from(subnetId), secondLow)));
+		Assertions.assertTrue(agent.principalIsWithinRanges(high,
+				ResponseAuthentication.lookupCanisterRanges(certificate, Principal.from(subnetId), high)));
+		Assertions.assertThrows(AgentError.class, () -> ResponseAuthentication.lookupCanisterRanges(certificate,
+				Principal.from(subnetId), Principal.from(new byte[] {0x0f})));
+	}
+
+	@Test
+	void verifiesCertificateDelegationUsingShardedRanges() throws Exception {
+		byte[][] root = blsKeys();
+		byte[][] delegated = blsKeys();
+		agent.setRootKey(root[1]);
+		byte[] subnetId = new byte[] {1};
+		byte[] rangeShard = mapper().writeValueAsBytes(Collections.singletonList(
+				Arrays.asList(canister.getValue(), canister.getValue())));
+		Object ranges = label("canister_ranges", label("\u0001", label(canister.getValue(), leaf(rangeShard))));
+		byte[] legacyRanges = mapper().writeValueAsBytes(Collections.singletonList(
+				Arrays.asList(new byte[] {0x30}, new byte[] {0x30})));
+		Object subnetInfo = Arrays.asList(1, label("canister_ranges", leaf(legacyRanges)),
+				label("public_key", leaf(delegated[1])));
+		Object subnet = label("subnet", Arrays.asList(2, subnetId, subnetInfo));
+		Object parentTree = Arrays.asList(1, ranges, Arrays.asList(1, subnet, label("time", leaf(timestamp(0)))));
+		Certificate parent = signedCertificate(parentTree, root[0]);
+		Certificate child = signedCertificate(label("time", leaf(timestamp(nowNanos()))), delegated[0]);
+		Delegation delegation = new Delegation();
+		delegation.subnetId = subnetId;
+		Map<String, Object> parentWire = new HashMap<>();
+		parentWire.put("tree", parentTree);
+		parentWire.put("signature", parent.signature);
+		delegation.certificate = mapper().writeValueAsBytes(parentWire);
+		child.delegation = Optional.of(delegation);
+		Assertions.assertDoesNotThrow(() -> agent.verify(child, canister, false));
+		Assertions.assertThrows(AgentError.class,
+				() -> agent.verify(child, Principal.from(new byte[] {0x21}), false));
+		byte[] validSubnetId = delegation.subnetId;
+		delegation.subnetId = new byte[] {2};
+		Assertions.assertThrows(AgentError.class, () -> agent.verify(child, canister, false));
+		delegation.subnetId = validSubnetId;
+		byte[] invalidParentSignature = parent.signature.clone();
+		invalidParentSignature[0] ^= 1;
+		parentWire.put("signature", invalidParentSignature);
+		delegation.certificate = mapper().writeValueAsBytes(parentWire);
+		Assertions.assertThrows(AgentError.class, () -> agent.verify(child, canister, false));
+	}
+
+	@Test
+	void rejectsUnknownOrMalformedShardedCanisterRanges() throws Exception {
+		Certificate unknown = new Certificate();
+		Object unknownTree = label("canister_ranges", Arrays.asList(4, new byte[32]));
+		unknown.tree = mapper().readValue(mapper().writeValueAsBytes(
+				Collections.singletonMap("tree", unknownTree)), Certificate.class).tree;
+		Assertions.assertThrows(AgentError.class, () -> ResponseAuthentication.lookupCanisterRanges(unknown,
+				Principal.from(new byte[] {1})));
+
+		Object badRange = mapper().writeValueAsBytes(Collections.singletonList(Collections.singletonList(new byte[] {1})));
+		Object malformed = label("canister_ranges", label("\u0001", label(new byte[] {1}, leaf((byte[]) badRange))));
+		Certificate invalid = new Certificate();
+		invalid.tree = mapper().readValue(mapper().writeValueAsBytes(Collections.singletonMap("tree", malformed)),
+				Certificate.class).tree;
+		AgentError error = Assertions.assertThrows(AgentError.class,
+				() -> ResponseAuthentication.lookupCanisterRanges(invalid, Principal.from(new byte[] {1})));
+		Assertions.assertEquals(AgentError.AgentErrorCode.INVALID_CBOR_DATA, error.getCode());
+
+		byte[] validRange = mapper().writeValueAsBytes(Collections.singletonList(
+				Arrays.asList(new byte[] {1}, new byte[] {1})));
+		byte[] trailingCbor = Arrays.copyOf(validRange, validRange.length + 1);
+		trailingCbor[trailingCbor.length - 1] = 1;
+		Object trailingTree = label("canister_ranges", label("\u0001",
+				label(new byte[] {1}, leaf(trailingCbor))));
+		Certificate trailing = new Certificate();
+		trailing.tree = mapper().readValue(mapper().writeValueAsBytes(
+				Collections.singletonMap("tree", trailingTree)), Certificate.class).tree;
+		AgentError trailingError = Assertions.assertThrows(AgentError.class,
+				() -> ResponseAuthentication.lookupCanisterRanges(trailing, Principal.from(new byte[] {1})));
+		Assertions.assertEquals(AgentError.AgentErrorCode.INVALID_CBOR_DATA, trailingError.getCode());
+	}
+
+	@Test
 	void malformedCertificatesCompleteExceptionally() throws Exception {
 		Object nested = Collections.singletonList(0);
 		for(int depth = 0; depth < 130; depth++)
@@ -210,6 +322,10 @@ public class AgentSecurityTest {
 
 	private static Object label(String name, Object tree) {
 		return Arrays.asList(2, name.getBytes(StandardCharsets.UTF_8), tree);
+	}
+
+	private static Object label(byte[] name, Object tree) {
+		return Arrays.asList(2, name, tree);
 	}
 
 	private static Object leaf(byte[] value) {
