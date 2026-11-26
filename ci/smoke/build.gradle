@@ -21,6 +21,8 @@ if (!clientModules.containsKey(transport) || (transport == 'java-http' && testJa
 dependencies {
     implementation 'org.ic4j:ic4j-candid:0.8.5'
     implementation 'org.ic4j:ic4j-agent:0.8.5'
+    // Agent expects the application to supply its logging runtime.
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.20'
     runtimeOnly(clientModules[transport]) {
         version { strictly(clientVersion) }
     }
