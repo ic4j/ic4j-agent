@@ -40,6 +40,6 @@ application {
 
 tasks.withType(JavaCompile).configureEach {
     if (JavaVersion.current().isJava9Compatible()) {
-        options.release = 8
+        options.release = transport == 'java-http' ? 11 : 8
     }
 }
