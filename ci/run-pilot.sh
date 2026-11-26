@@ -3,7 +3,7 @@ set -euo pipefail
 
 : "${RUNNER_TEMP:?}" "${GITHUB_WORKSPACE:?}" "${CI_MAVEN_REPO:?}" "${TEST_JAVA:?}"
 [[ "$CI_MAVEN_REPO" == "$RUNNER_TEMP/ic4j-maven" ]]
-[[ "$TEST_JAVA" == 8 || "$TEST_JAVA" == 11 ]]
+[[ "$TEST_JAVA" == 8 || "$TEST_JAVA" == 11 || "$TEST_JAVA" == 21 ]]
 base="$(cd "$(dirname "$0")" && pwd)"
 reports="$RUNNER_TEMP/ic4j-pilot-reports"
 mkdir -p "$reports"
@@ -46,7 +46,7 @@ case "${1:-}" in
     check_tests "$GITHUB_WORKSPACE/candid/build/test-results/test" GsonTest
     g -p "$GITHUB_WORKSPACE/agent" clean test publishToMavenLocal
     check_tests "$GITHUB_WORKSPACE/agent/build/test-results/test"
-    if [[ "$TEST_JAVA" == 11 ]]; then
+    if [[ "$TEST_JAVA" != 8 ]]; then
       git -C "$GITHUB_WORKSPACE/transport" rev-parse HEAD >> "$reports/source-commits.txt"
       g -p "$GITHUB_WORKSPACE/transport" clean assemble publishToMavenLocal
     fi
@@ -54,7 +54,6 @@ case "${1:-}" in
       sort -z | xargs -0 -r sha256sum) | tee "$reports/ic4j-artifacts.sha256"
     ;;
   smoke)
-    [[ "$TEST_JAVA" == 11 ]]
     archive="$RUNNER_TEMP/dfx-0.32.0-x86_64-linux.tar.gz"
     curl --fail --silent --show-error --location --retry 3 --max-time 180 \
       'https://github.com/dfinity/sdk/releases/download/0.32.0/dfx-0.32.0-x86_64-linux.tar.gz' -o "$archive"
@@ -78,19 +77,25 @@ case "${1:-}" in
     IC4J_CI_CANISTER="$(dfx canister --network local id ictest)"
     [[ "$IC4J_CI_CANISTER" =~ ^[a-z0-9]+(-[a-z0-9]+)+$ ]]
     (cd "$CI_MAVEN_REPO"; sha256sum -c "$reports/ic4j-artifacts.sha256")
-    for apache_version in 5.6.5 5.5.2; do
-      apache_only=false
-      [[ "$apache_version" == 5.6.5 ]] || apache_only=true
-      log="$reports/icp-apache-$apache_version.log"
-      timeout 300s gradle --no-daemon --console=plain \
+    run_case() {
+      local kind="$1" version="$2" log="$reports/icp-$1-$2.log"
+      if ! timeout 300s gradle --no-daemon --console=plain \
         -Dmaven.repo.local="$CI_MAVEN_REPO" --init-script "$base/local-artifacts.init.gradle" \
-        -p "$base/smoke" "-PpilotApacheVersion=$apache_version" "-PpilotApacheOnly=$apache_only" \
-        run 2>&1 | tee "$log"
-      grep -Fq "PASS: Agent/Apache HTTP $apache_version UPDATE + QUERY (Java 11)" "$log"
-      if [[ "$apache_only" == false ]]; then
-        grep -Fq 'PASS: Java HTTP Transport UPDATE + QUERY (Java 11)' "$log"
+        -p "$base/smoke" "-PpilotTransport=$kind" "-PpilotClientVersion=$version" \
+        "-PpilotJava=$TEST_JAVA" run 2>&1 | tee "$log"; then
+        return 1
       fi
-    done
+      grep -Fq "PASS: $kind $version UPDATE + QUERY (Java $TEST_JAVA)" "$log"
+    }
+    failures=0
+    run_case apache 5.6.5 || failures=$((failures + 1))
+    run_case apache 5.5.2 || failures=$((failures + 1))
+    run_case okhttp 4.12.0 || failures=$((failures + 1))
+    run_case okhttp 5.5.0 || failures=$((failures + 1))
+    if [[ "$TEST_JAVA" != 8 ]]; then
+      run_case java-http 0.8.5 || failures=$((failures + 1))
+    fi
+    (( failures == 0 ))
     ;;
   *) echo 'Usage: run-pilot.sh build|smoke' >&2; exit 2 ;;
 esac

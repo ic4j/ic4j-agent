@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: ['8', '11']
+        java: ['8', '11', '21']
     env:
       CANDID_REV: 35933a00ebfaeff6852010deed1633773c19b3a9
       TRANSPORT_REV: e5314fa19bea47eb943e41f6cc6abee784593dcb
@@ -37,7 +37,7 @@ jobs:
           path: candid
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        if: matrix.java == '11'
+        if: matrix.java != '8'
         with:
           repository: ic4j/ic4j-java11transport
           ref: ${{ env.TRANSPORT_REV }}
@@ -51,15 +51,14 @@ jobs:
         with:
           gradle-version: '8.14'
           cache-disabled: true
-      - name: Build and test Candid and Agent, then build Java HTTP Transport on 11
+      - name: Build and test Candid and Agent, plus Java HTTP Transport on 11 and newer
         env:
           TEST_JAVA: ${{ matrix.java }}
           CI_MAVEN_REPO: ${{ runner.temp }}/ic4j-maven
         run: bash agent/ci/run-pilot.sh build
-      - name: Verify Agent with two Apache HttpClient versions and Java HTTP Transport on local ICP
-        if: matrix.java == '11'
+      - name: Verify Apache, OkHttp and eligible Java HTTP Transport against local ICP
         env:
-          TEST_JAVA: '11'
+          TEST_JAVA: ${{ matrix.java }}
           CI_MAVEN_REPO: ${{ runner.temp }}/ic4j-maven
         run: bash agent/ci/run-pilot.sh smoke
       - name: Preserve test reports and provenance

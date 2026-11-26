@@ -8,8 +8,6 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
-import org.apache.hc.core5.http.HttpVersion;
 import org.ic4j.agent.Agent;
 import org.ic4j.agent.AgentBuilder;
 import org.ic4j.agent.NonceFactory;
@@ -17,7 +15,7 @@ import org.ic4j.agent.ReplicaTransport;
 import org.ic4j.agent.UpdateBuilder;
 import org.ic4j.agent.Waiter;
 import org.ic4j.agent.http.ReplicaApacheHttpTransport;
-import org.ic4j.agent.http.ReplicaJavaHttpTransport;
+import org.ic4j.agent.http.ReplicaOkHttpTransport;
 import org.ic4j.candid.parser.IDLArgs;
 import org.ic4j.candid.parser.IDLValue;
 import org.ic4j.types.Principal;
@@ -29,31 +27,54 @@ public final class LocalReplicaSmoke {
     private LocalReplicaSmoke() {}
 
     public static void main(String[] args) throws Exception {
-        if (Runtime.version().feature() != 11) {
-            throw new IllegalStateException("This smoke expects a Java 11 process");
+        String javaVersion = System.getProperty("java.specification.version").replaceFirst("^1[.]", "");
+        if (!javaVersion.equals(System.getProperty("ic4j.ci.java"))) {
+            throw new IllegalStateException("Unexpected Java runtime: " + javaVersion);
         }
         requireLocalJar(Agent.class, "ic4j-agent");
         requireLocalJar(IDLArgs.class, "ic4j-candid");
-        boolean apacheOnly = Boolean.getBoolean("ic4j.ci.apacheOnly");
-        if (!apacheOnly) {
-            requireLocalJar(ReplicaJavaHttpTransport.class, "ic4j-java11transport");
-        }
-        String apacheVersion = System.getProperty("ic4j.ci.apacheVersion");
-        String apacheJar = loadedPath(CloseableHttpAsyncClient.class).getFileName().toString();
-        if (!apacheJar.equals("httpclient5-" + apacheVersion + ".jar")) {
-            throw new IllegalStateException("Unexpected Apache HttpClient JAR: " + apacheJar);
-        }
-        System.out.println("Apache runtime: " + apacheJar + "; " + loadedPath(HttpVersion.class).getFileName());
 
         String id = System.getenv("IC4J_CI_CANISTER");
         if (id == null || id.isEmpty()) {
             throw new IllegalArgumentException("Local fixture ID is missing");
         }
         Principal canister = Principal.fromString(id);
-        check("Agent/Apache HTTP " + apacheVersion, ReplicaApacheHttpTransport.create(URL), canister);
-        if (!apacheOnly) {
-            check("Java HTTP Transport", ReplicaJavaHttpTransport.create(URL), canister);
+        String transport = System.getProperty("ic4j.ci.transport");
+        String version = System.getProperty("ic4j.ci.clientVersion");
+        ReplicaTransport client;
+        switch (transport) {
+            case "apache":
+                assertClientJar("org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient",
+                        "httpclient5-" + version + ".jar");
+                System.out.println("Apache HttpCore: "
+                        + loadedPath(Class.forName("org.apache.hc.core5.http.HttpVersion")).getFileName());
+                client = ReplicaApacheHttpTransport.create(URL);
+                break;
+            case "okhttp":
+                assertClientJar("okhttp3.OkHttpClient",
+                        (version.startsWith("5.") ? "okhttp-jvm-" : "okhttp-") + version + ".jar");
+                client = ReplicaOkHttpTransport.create(URL);
+                break;
+            case "java-http":
+                if ("8".equals(javaVersion)) {
+                    throw new IllegalStateException("Java HTTP Transport requires Java 11 or newer");
+                }
+                Class<?> javaTransport = Class.forName("org.ic4j.agent.http.ReplicaJavaHttpTransport");
+                requireLocalJar(javaTransport, "ic4j-java11transport");
+                client = (ReplicaTransport) javaTransport.getMethod("create", String.class).invoke(null, URL);
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown transport: " + transport);
         }
+        check(transport + " " + version, client, canister, javaVersion);
+    }
+
+    private static void assertClientJar(String className, String expected) throws Exception {
+        String actual = loadedPath(Class.forName(className)).getFileName().toString();
+        if (!expected.equals(actual)) {
+            throw new IllegalStateException("Expected " + expected + ", loaded " + actual);
+        }
+        System.out.println("Client runtime: " + actual);
     }
 
     private static Path loadedPath(Class<?> type) throws Exception {
@@ -71,7 +92,8 @@ public final class LocalReplicaSmoke {
         System.out.println("Loaded " + loaded);
     }
 
-    private static void check(String name, ReplicaTransport transport, Principal canister) throws Exception {
+    private static void check(String name, ReplicaTransport transport, Principal canister, String javaVersion)
+            throws Exception {
         Agent agent = new AgentBuilder().transport(transport).nonceFactory(new NonceFactory()).build();
         try {
             agent.fetchRootKey();
@@ -84,7 +106,7 @@ public final class LocalReplicaSmoke {
             byte[] query = agent.queryRaw(canister, canister, "getName", empty, Optional.empty())
                     .get(20, TimeUnit.SECONDS);
             assertText("QUERY", name, query);
-            System.out.println("PASS: " + name + " UPDATE + QUERY (Java 11)");
+            System.out.println("PASS: " + name + " UPDATE + QUERY (Java " + javaVersion + ")");
         } finally {
             agent.close();
         }
