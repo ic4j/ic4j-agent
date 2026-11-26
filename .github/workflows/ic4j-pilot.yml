@@ -4,6 +4,8 @@ name: IC4J Java compatibility pilot
 # [run ic4j pilot] commit to this one branch allows pre-merge validation.
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [master]
   push:
     branches: [ci/ic4j-java-compatibility-pilot]
 
@@ -11,11 +13,57 @@ permissions:
   contents: read
 
 jobs:
-  compatibility:
+  changes:
     if: >-
       github.repository == 'ic4j/ic4j-agent' &&
-      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' ||
+       github.event_name == 'workflow_dispatch' ||
        contains(github.event.head_commit.message, '[run ic4j pilot]'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      run: ${{ steps.paths.outputs.run }}
+    steps:
+      - name: Check whether the PR only changes Markdown
+        id: paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          revisions_match() {
+            gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" |
+              jq -e --arg head "$PR_HEAD" --arg base "$PR_BASE" '
+                ($head != "") and ($base != "")
+                and (.head.sha == $head) and (.base.sha == $base)
+              ' >/dev/null
+          }
+          run=true
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]] &&
+            revisions_match &&
+            gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" |
+              jq -es --argjson expected "$CHANGED_FILES" '
+                [ .[][] ] as $files
+                | ($expected > 0) and ($expected < 3000)
+                  and (($files | length) == $expected)
+                  and all($files[];
+                    (.filename | endswith(".md"))
+                    and ((.previous_filename // .filename) | endswith(".md")))
+              ' >/dev/null &&
+            revisions_match; then
+            run=false
+          fi
+          printf 'run=%s\n' "$run" >> "$GITHUB_OUTPUT"
+          printf 'Run integration tests: %s\n' "$run"
+
+  compatibility:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -72,3 +120,23 @@ jobs:
             ${{ runner.temp }}/ic4j-pilot-reports/
             candid/build/test-results/test/
             agent/build/test-results/test/
+
+  pr-checks:
+    name: IC4J Agent PR checks
+    needs: [changes, compatibility]
+    if: ${{ always() && github.event_name == 'pull_request' && github.repository == 'ic4j/ic4j-agent' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Report result
+        env:
+          CLASSIFY: ${{ needs.changes.result }}
+          SELECTED: ${{ needs.changes.outputs.run }}
+          TESTS: ${{ needs.compatibility.result }}
+        run: |
+          test "$CLASSIFY" = success
+          case "$SELECTED:$TESTS" in
+            false:skipped) echo "Markdown-only PR; integration tests not needed." ;;
+            true:success) echo "Integration tests passed." ;;
+            *) echo "Integration test result: $TESTS (selected: $SELECTED)"; exit 1 ;;
+          esac
