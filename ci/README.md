@@ -12,3 +12,9 @@ Gradle 8.14 runs on the lane JDK. Each lane starts with an empty Maven directory
 The fixture is a disposable Motoko canister compiled and deployed by a SHA-256-verified DFX 0.32.0 release. Each smoke writes a distinct value and reads it back. The fixture ID is supplied at run time and the address is fixed to loopback. Local trust-root discovery uses that replica. No real keys or pre-existing canisters are needed.
 
 Before merge GitHub cannot dispatch a new workflow via `workflow_dispatch` because the file does not exist on the default branch. A maintainer may explicitly run this pilot before merge by pushing a commit containing `[run ic4j pilot]` to the dedicated branch `ci/ic4j-java-compatibility-pilot` in `ic4j/ic4j-agent`. Once on the default branch, it can be launched from Actions. No Kafka, Camel, GitHub Packages, Maven Central upload or Java 27 lane in this PR.
+
+The workflow also runs automatically when a PR targets `master`. It skips the
+integration suite only when every changed path is Markdown (including both paths
+for a rename), and runs the suite when changed-file information is incomplete.
+The named PR check reports a result in either case. Manual dispatch still
+runs the full suite.
