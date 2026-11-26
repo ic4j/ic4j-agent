@@ -42,7 +42,7 @@ case "${1:-}" in
     for project in candid agent; do
       git -C "$GITHUB_WORKSPACE/$project" rev-parse HEAD
     done | tee "$reports/source-commits.txt"
-    g -p "$GITHUB_WORKSPACE/candid" clean test publishToMavenLocal
+    g -p "$GITHUB_WORKSPACE/candid" -PrunJavacc=true clean test publishToMavenLocal
     check_tests "$GITHUB_WORKSPACE/candid/build/test-results/test" GsonTest
     g -p "$GITHUB_WORKSPACE/agent" clean test publishToMavenLocal
     check_tests "$GITHUB_WORKSPACE/agent/build/test-results/test"
