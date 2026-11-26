@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "canisters": {
+    "ictest": {
+      "type": "motoko",
+      "main": "main.mo"
+    }
+  }
+}

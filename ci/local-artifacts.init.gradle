@@ -1,0 +1,15 @@
+// CI only: org.ic4j must come from this run, never from Central or a user cache.
+gradle.projectsEvaluated {
+    File runRepo = new File(System.getProperty('maven.repo.local')).canonicalFile
+    gradle.rootProject.allprojects.each { project ->
+        project.repositories.exclusiveContent {
+            forRepository {
+                project.repositories.maven {
+                    name = 'ic4jPilot'
+                    url = runRepo.toURI()
+                }
+            }
+            filter { includeGroup('org.ic4j') }
+        }
+    }
+}
