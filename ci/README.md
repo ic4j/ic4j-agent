@@ -16,5 +16,6 @@ Before merge GitHub cannot dispatch a new workflow via `workflow_dispatch` becau
 The workflow also runs automatically when a PR targets `master`. It skips the
 integration suite only when every changed path is Markdown (including both paths
 for a rename), and runs the suite when changed-file information is incomplete.
+It also runs the suite when the PR head or base no longer matches the event.
 The named PR check reports a result in either case. Manual dispatch still
 runs the full suite.

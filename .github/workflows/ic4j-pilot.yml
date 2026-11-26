@@ -32,10 +32,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         shell: bash
         run: |
+          revisions_match() {
+            gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" |
+              jq -e --arg head "$PR_HEAD" --arg base "$PR_BASE" '
+                ($head != "") and ($base != "")
+                and (.head.sha == $head) and (.base.sha == $base)
+              ' >/dev/null
+          }
           run=true
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]] &&
+            revisions_match &&
             gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" |
               jq -es --argjson expected "$CHANGED_FILES" '
                 [ .[][] ] as $files
@@ -44,7 +54,8 @@ jobs:
                   and all($files[];
                     (.filename | endswith(".md"))
                     and ((.previous_filename // .filename) | endswith(".md")))
-              ' >/dev/null; then
+              ' >/dev/null &&
+            revisions_match; then
             run=false
           fi
           printf 'run=%s\n' "$run" >> "$GITHUB_OUTPUT"
