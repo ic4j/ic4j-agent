@@ -43,3 +43,12 @@ tasks.withType(JavaCompile).configureEach {
         options.release = transport == 'java-http' ? 11 : 8
     }
 }
+
+// Keep Gradle and compilation on the baseline JDK and only switch the
+// process that loads the actual runtime libraries and talks to the replica.
+def smokeJavaHome = providers.environmentVariable('IC4J_SMOKE_JAVA_HOME')
+if (smokeJavaHome.isPresent()) {
+    tasks.named('run', JavaExec) {
+        executable = new File(smokeJavaHome.get(), 'bin/java').absolutePath
+    }
+}

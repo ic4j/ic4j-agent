@@ -11,7 +11,7 @@ Gradle 8.14 runs on the lane JDK. Each lane starts with an empty Maven directory
 
 The fixture is a disposable Motoko canister compiled and deployed by a SHA-256-verified DFX 0.32.0 release. Each smoke writes a distinct value and reads it back. The fixture ID is supplied at run time and the address is fixed to loopback. Local trust-root discovery uses that replica. No real keys or pre-existing canisters are needed.
 
-Before merge GitHub cannot dispatch a new workflow via `workflow_dispatch` because the file does not exist on the default branch. A maintainer may explicitly run this pilot before merge by pushing a commit containing `[run ic4j pilot]` to the dedicated branch `ci/ic4j-java-compatibility-pilot` in `ic4j/ic4j-agent`. Once on the default branch, it can be launched from Actions. No Kafka, Camel, GitHub Packages, Maven Central upload or Java 27 lane in this PR.
+Before merge GitHub cannot dispatch a new workflow via `workflow_dispatch` because the file does not exist on the default branch. A maintainer may explicitly run this pilot before merge by pushing a commit containing `[run ic4j pilot]` to the dedicated branch `ci/ic4j-java-compatibility-pilot` in `ic4j/ic4j-agent`. Once on the default branch, it can be launched from Actions. No Kafka, Camel, GitHub Packages, or Maven Central upload.
 
 The workflow also runs automatically when a PR targets `master`. It skips the
 integration suite only when every changed path is Markdown (including both paths
@@ -19,3 +19,18 @@ for a rename), and runs the suite when changed-file information is incomplete.
 It also runs the suite when the PR head or base no longer matches the event.
 The named PR check reports a result in either case. Manual dispatch still
 runs the full suite.
+
+## Experimental Java 27 runtime
+
+The separate **IC4J Agent Java 27 experimental** workflow leaves the Java 8,
+11 and 21 checks unchanged. Gradle 8.14 and the unit tests run on Java 21;
+the smoke application runs on OpenJDK 27 and asserts its actual JVM version.
+It uses the same local canister to verify Apache 5.6.5 / 5.5.2 and OkHttp
+4.12.0 / 5.5.0. This is not a Java 27 build/toolchain certification. The
+Java 11 HTTP transport remains covered by the regular matrix, not this smoke.
+
+The experiment is not part of the Agent PR gate. Failures remain visible in
+its own Actions run. Run it manually after merge, or validate before merge
+with a commit containing `[run java27 pilot]` on
+`ci/agent-java27-experimental`. The artifact records the runtime version,
+library hashes and four smoke logs. No packages are published.

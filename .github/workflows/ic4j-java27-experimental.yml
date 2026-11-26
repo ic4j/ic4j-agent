@@ -1,0 +1,75 @@
+name: IC4J Agent Java 27 experimental
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/agent-java27-experimental]
+
+permissions:
+  contents: read
+
+jobs:
+  java27:
+    name: Java 27 runtime (experimental)
+    if: >-
+      github.repository == 'ic4j/ic4j-agent' &&
+      (github.event_name == 'workflow_dispatch' ||
+       contains(github.event.head_commit.message, '[run java27 pilot]'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CANDID_REV: 35933a00ebfaeff6852010deed1633773c19b3a9
+      TRANSPORT_REV: e5314fa19bea47eb943e41f6cc6abee784593dcb
+      TEST_JAVA: '21'
+      CI_MAVEN_REPO: ${{ runner.temp }}/ic4j-maven
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: agent
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: ic4j/ic4j-candid
+          ref: ${{ env.CANDID_REV }}
+          path: candid
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: ic4j/ic4j-java11transport
+          ref: ${{ env.TRANSPORT_REV }}
+          path: transport
+          persist-credentials: false
+      - name: Set up OpenJDK 27 for runtime checks
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        id: java27
+        with:
+          distribution: oracle-openjdk
+          java-version: '27-ea'
+      - name: Set up Java 21 for the existing build and unit tests
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+        with:
+          gradle-version: '8.14'
+          cache-disabled: true
+      - name: Build verified local libraries with Java 21
+        run: bash agent/ci/run-pilot.sh build
+      - name: Run Apache and OkHttp against local ICP on Java 27
+        env:
+          IC4J_SMOKE_JAVA_HOME: ${{ steps.java27.outputs.path }}
+        run: |
+          test -n "$IC4J_SMOKE_JAVA_HOME"
+          bash agent/ci/run-pilot.sh smoke
+      - name: Preserve test reports and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ic4j-java27-runtime-reports
+          retention-days: 10
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/ic4j-pilot-reports/
+            candid/build/test-results/test/
+            agent/build/test-results/test/
