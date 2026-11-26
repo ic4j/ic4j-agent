@@ -4,6 +4,15 @@ set -euo pipefail
 : "${RUNNER_TEMP:?}" "${GITHUB_WORKSPACE:?}" "${CI_MAVEN_REPO:?}" "${TEST_JAVA:?}"
 [[ "$CI_MAVEN_REPO" == "$RUNNER_TEMP/ic4j-maven" ]]
 [[ "$TEST_JAVA" == 8 || "$TEST_JAVA" == 11 || "$TEST_JAVA" == 21 ]]
+smoke_java="$TEST_JAVA"
+smoke_task=run
+if [[ -n "${IC4J_SMOKE_JAVA_HOME:-}" ]]; then
+  [[ "${1:-}" == smoke && "$TEST_JAVA" == 21 ]]
+  smoke_java=27
+  smoke_task=runExperimental
+  smoke_exe="$IC4J_SMOKE_JAVA_HOME/bin/java"
+  [[ -x "$smoke_exe" ]]
+fi
 base="$(cd "$(dirname "$0")" && pwd)"
 reports="$RUNNER_TEMP/ic4j-pilot-reports"
 mkdir -p "$reports"
@@ -54,6 +63,11 @@ case "${1:-}" in
       sort -z | xargs -0 -r sha256sum) | tee "$reports/ic4j-artifacts.sha256"
     ;;
   smoke)
+    if [[ "$smoke_java" == 27 ]]; then
+      "$smoke_exe" -version 2>&1 | tee "$reports/smoke-java-version.txt"
+      smoke_spec="$("$smoke_exe" -XshowSettings:properties -version 2>&1 | awk '$1 == "java.specification.version" {print $3}')"
+      [[ "$smoke_spec" == "$smoke_java" ]]
+    fi
     archive="$RUNNER_TEMP/dfx-0.32.0-x86_64-linux.tar.gz"
     curl --fail --silent --show-error --location --retry 3 --max-time 180 \
       'https://github.com/dfinity/sdk/releases/download/0.32.0/dfx-0.32.0-x86_64-linux.tar.gz' -o "$archive"
@@ -82,17 +96,17 @@ case "${1:-}" in
       if ! timeout 300s gradle --no-daemon --console=plain \
         -Dmaven.repo.local="$CI_MAVEN_REPO" --init-script "$base/local-artifacts.init.gradle" \
         -p "$base/smoke" "-PpilotTransport=$kind" "-PpilotClientVersion=$version" \
-        "-PpilotJava=$TEST_JAVA" run 2>&1 | tee "$log"; then
+        "-PpilotJava=$smoke_java" "$smoke_task" 2>&1 | tee "$log"; then
         return 1
       fi
-      grep -Fq "PASS: $kind $version UPDATE + QUERY (Java $TEST_JAVA)" "$log"
+      grep -Fq "PASS: $kind $version UPDATE + QUERY (Java $smoke_java)" "$log"
     }
     failures=0
     run_case apache 5.6.5 || failures=$((failures + 1))
     run_case apache 5.5.2 || failures=$((failures + 1))
     run_case okhttp 4.12.0 || failures=$((failures + 1))
     run_case okhttp 5.5.0 || failures=$((failures + 1))
-    if [[ "$TEST_JAVA" != 8 ]]; then
+    if [[ "$smoke_java" != 8 && "$smoke_java" != 27 ]]; then
       run_case java-http 0.8.5 || failures=$((failures + 1))
     fi
     (( failures == 0 ))

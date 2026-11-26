@@ -43,3 +43,16 @@ tasks.withType(JavaCompile).configureEach {
         options.release = transport == 'java-http' ? 11 : 8
     }
 }
+
+// Use a plain subprocess so Gradle 8.14 does not select a Java 27 toolchain.
+// It receives exactly the classpath, entry point and JVM arguments of the
+// regular smoke application.
+tasks.register('runExperimental', Exec) {
+    dependsOn tasks.named('classes')
+    doFirst {
+        def smokeJavaHome = providers.environmentVariable('IC4J_SMOKE_JAVA_HOME').get()
+        commandLine([new File(smokeJavaHome, 'bin/java').absolutePath] +
+            application.applicationDefaultJvmArgs +
+            ['-cp', sourceSets.main.runtimeClasspath.asPath, application.mainClass.get()])
+    }
+}
