@@ -5,9 +5,11 @@ set -euo pipefail
 [[ "$CI_MAVEN_REPO" == "$RUNNER_TEMP/ic4j-maven" ]]
 [[ "$TEST_JAVA" == 8 || "$TEST_JAVA" == 11 || "$TEST_JAVA" == 21 ]]
 smoke_java="$TEST_JAVA"
+smoke_task=run
 if [[ -n "${IC4J_SMOKE_JAVA_HOME:-}" ]]; then
   [[ "${1:-}" == smoke && "$TEST_JAVA" == 21 ]]
   smoke_java=27
+  smoke_task=runExperimental
   smoke_exe="$IC4J_SMOKE_JAVA_HOME/bin/java"
   [[ -x "$smoke_exe" ]]
 fi
@@ -94,7 +96,7 @@ case "${1:-}" in
       if ! timeout 300s gradle --no-daemon --console=plain \
         -Dmaven.repo.local="$CI_MAVEN_REPO" --init-script "$base/local-artifacts.init.gradle" \
         -p "$base/smoke" "-PpilotTransport=$kind" "-PpilotClientVersion=$version" \
-        "-PpilotJava=$smoke_java" run 2>&1 | tee "$log"; then
+        "-PpilotJava=$smoke_java" "$smoke_task" 2>&1 | tee "$log"; then
         return 1
       fi
       grep -Fq "PASS: $kind $version UPDATE + QUERY (Java $smoke_java)" "$log"

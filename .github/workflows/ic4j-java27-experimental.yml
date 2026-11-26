@@ -21,7 +21,6 @@ jobs:
       CANDID_REV: 35933a00ebfaeff6852010deed1633773c19b3a9
       TRANSPORT_REV: e5314fa19bea47eb943e41f6cc6abee784593dcb
       TEST_JAVA: '21'
-      CI_MAVEN_REPO: ${{ runner.temp }}/ic4j-maven
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -55,9 +54,12 @@ jobs:
           gradle-version: '8.14'
           cache-disabled: true
       - name: Build verified local libraries with Java 21
+        env:
+          CI_MAVEN_REPO: ${{ runner.temp }}/ic4j-maven
         run: bash agent/ci/run-pilot.sh build
       - name: Run Apache and OkHttp against local ICP on Java 27
         env:
+          CI_MAVEN_REPO: ${{ runner.temp }}/ic4j-maven
           IC4J_SMOKE_JAVA_HOME: ${{ steps.java27.outputs.path }}
         run: |
           test -n "$IC4J_SMOKE_JAVA_HOME"
