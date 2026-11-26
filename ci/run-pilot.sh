@@ -78,11 +78,19 @@ case "${1:-}" in
     IC4J_CI_CANISTER="$(dfx canister --network local id ictest)"
     [[ "$IC4J_CI_CANISTER" =~ ^[a-z0-9]+(-[a-z0-9]+)+$ ]]
     (cd "$CI_MAVEN_REPO"; sha256sum -c "$reports/ic4j-artifacts.sha256")
-    timeout 300s gradle --no-daemon --console=plain \
-      -Dmaven.repo.local="$CI_MAVEN_REPO" --init-script "$base/local-artifacts.init.gradle" \
-      -p "$base/smoke" run 2>&1 | tee "$reports/icp-smoke.log"
-    grep -Fq 'PASS: Agent/Apache HTTP UPDATE + QUERY (Java 11)' "$reports/icp-smoke.log"
-    grep -Fq 'PASS: Java HTTP Transport UPDATE + QUERY (Java 11)' "$reports/icp-smoke.log"
+    for apache_version in 5.6.5 5.5.2; do
+      apache_only=false
+      [[ "$apache_version" == 5.6.5 ]] || apache_only=true
+      log="$reports/icp-apache-$apache_version.log"
+      timeout 300s gradle --no-daemon --console=plain \
+        -Dmaven.repo.local="$CI_MAVEN_REPO" --init-script "$base/local-artifacts.init.gradle" \
+        -p "$base/smoke" "-PpilotApacheVersion=$apache_version" "-PpilotApacheOnly=$apache_only" \
+        run 2>&1 | tee "$log"
+      grep -Fq "PASS: Agent/Apache HTTP $apache_version UPDATE + QUERY (Java 11)" "$log"
+      if [[ "$apache_only" == false ]]; then
+        grep -Fq 'PASS: Java HTTP Transport UPDATE + QUERY (Java 11)' "$log"
+      fi
+    done
     ;;
   *) echo 'Usage: run-pilot.sh build|smoke' >&2; exit 2 ;;
 esac

@@ -8,6 +8,8 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
+import org.apache.hc.core5.http.HttpVersion;
 import org.ic4j.agent.Agent;
 import org.ic4j.agent.AgentBuilder;
 import org.ic4j.agent.NonceFactory;
@@ -32,21 +34,36 @@ public final class LocalReplicaSmoke {
         }
         requireLocalJar(Agent.class, "ic4j-agent");
         requireLocalJar(IDLArgs.class, "ic4j-candid");
-        requireLocalJar(ReplicaJavaHttpTransport.class, "ic4j-java11transport");
+        boolean apacheOnly = Boolean.getBoolean("ic4j.ci.apacheOnly");
+        if (!apacheOnly) {
+            requireLocalJar(ReplicaJavaHttpTransport.class, "ic4j-java11transport");
+        }
+        String apacheVersion = System.getProperty("ic4j.ci.apacheVersion");
+        String apacheJar = loadedPath(CloseableHttpAsyncClient.class).getFileName().toString();
+        if (!apacheJar.equals("httpclient5-" + apacheVersion + ".jar")) {
+            throw new IllegalStateException("Unexpected Apache HttpClient JAR: " + apacheJar);
+        }
+        System.out.println("Apache runtime: " + apacheJar + "; " + loadedPath(HttpVersion.class).getFileName());
 
         String id = System.getenv("IC4J_CI_CANISTER");
         if (id == null || id.isEmpty()) {
             throw new IllegalArgumentException("Local fixture ID is missing");
         }
         Principal canister = Principal.fromString(id);
-        check("Agent/Apache HTTP", ReplicaApacheHttpTransport.create(URL), canister);
-        check("Java HTTP Transport", ReplicaJavaHttpTransport.create(URL), canister);
+        check("Agent/Apache HTTP " + apacheVersion, ReplicaApacheHttpTransport.create(URL), canister);
+        if (!apacheOnly) {
+            check("Java HTTP Transport", ReplicaJavaHttpTransport.create(URL), canister);
+        }
+    }
+
+    private static Path loadedPath(Class<?> type) throws Exception {
+        return Paths.get(type.getProtectionDomain().getCodeSource().getLocation().toURI()).toRealPath();
     }
 
     private static void requireLocalJar(Class<?> type, String artifact) throws Exception {
         Path expected = Paths.get(System.getProperty("ic4j.ci.repo"), "org", "ic4j",
                 artifact, "0.8.5", artifact + "-0.8.5.jar").toRealPath();
-        Path loaded = Paths.get(type.getProtectionDomain().getCodeSource().getLocation().toURI()).toRealPath();
+        Path loaded = loadedPath(type);
         if (!Files.isRegularFile(loaded) ||
                 !Arrays.equals(Files.readAllBytes(expected), Files.readAllBytes(loaded))) {
             throw new IllegalStateException("Unexpected origin for " + artifact + ": " + loaded);

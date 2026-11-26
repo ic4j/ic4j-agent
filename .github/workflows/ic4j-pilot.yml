@@ -56,7 +56,7 @@ jobs:
           TEST_JAVA: ${{ matrix.java }}
           CI_MAVEN_REPO: ${{ runner.temp }}/ic4j-maven
         run: bash agent/ci/run-pilot.sh build
-      - name: Install pinned DFX and run two local ICP client checks
+      - name: Verify Agent with two Apache HttpClient versions and Java HTTP Transport on local ICP
         if: matrix.java == '11'
         env:
           TEST_JAVA: '11'

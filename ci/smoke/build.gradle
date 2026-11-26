@@ -6,16 +6,25 @@ repositories {
     mavenCentral()
 }
 
+def apacheVersion = providers.gradleProperty('pilotApacheVersion').orElse('5.6.5').get()
+def apacheOnly = providers.gradleProperty('pilotApacheOnly').map { it.toBoolean() }.orElse(false).get()
+
 dependencies {
     implementation 'org.ic4j:ic4j-candid:0.8.5'
     implementation 'org.ic4j:ic4j-agent:0.8.5'
     implementation 'org.ic4j:ic4j-java11transport:0.8.5'
-    implementation 'org.apache.httpcomponents.client5:httpclient5:5.6.5'
+    implementation('org.apache.httpcomponents.client5:httpclient5') {
+        version { strictly(apacheVersion) }
+    }
 }
 
 application {
     mainClass = 'org.ic4j.ci.LocalReplicaSmoke'
-    applicationDefaultJvmArgs = ['-Dic4j.ci.repo=' + System.getProperty('maven.repo.local')]
+    applicationDefaultJvmArgs = [
+        '-Dic4j.ci.repo=' + System.getProperty('maven.repo.local'),
+        '-Dic4j.ci.apacheVersion=' + apacheVersion,
+        '-Dic4j.ci.apacheOnly=' + apacheOnly
+    ]
 }
 
 tasks.withType(JavaCompile).configureEach { options.release = 11 }
