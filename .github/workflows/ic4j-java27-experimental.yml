@@ -38,12 +38,19 @@ jobs:
           ref: ${{ env.TRANSPORT_REV }}
           path: transport
           persist-credentials: false
-      - name: Set up OpenJDK 27 for runtime checks
-        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+      - name: Install the pinned Temurin 27 runtime
         id: java27
-        with:
-          distribution: oracle-openjdk
-          java-version: '27-ea'
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/temurin-27-35.tar.gz"
+          home="$(mktemp -d "$RUNNER_TEMP/temurin-27.XXXXXX")"
+          curl --fail --silent --show-error --location --retry 3 --max-time 180 \
+            'https://github.com/adoptium/temurin27-binaries/releases/download/jdk-27%2B35/OpenJDK27U-jdk_x64_linux_hotspot_27_35.tar.gz' \
+            -o "$archive"
+          printf '%s  %s\n' '1cf69a4848ffb728b3b260dfd45206a51566ab571a02a30092271d4c580bccbc' "$archive" | sha256sum -c -
+          tar -xzf "$archive" --strip-components=1 -C "$home"
+          "$home/bin/java" -version
+          printf 'path=%s\n' "$home" >> "$GITHUB_OUTPUT"
       - name: Set up Java 21 for the existing build and unit tests
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:

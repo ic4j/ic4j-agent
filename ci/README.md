@@ -24,7 +24,8 @@ runs the full suite.
 
 The separate **IC4J Agent Java 27 experimental** workflow leaves the Java 8,
 11 and 21 checks unchanged. Gradle 8.14 and the unit tests run on Java 21;
-the smoke application runs on OpenJDK 27 and asserts its actual JVM version.
+the smoke application runs on a SHA-256-pinned Temurin 27+35 runtime and
+asserts its actual JVM version.
 It uses the same local canister to verify Apache 5.6.5 / 5.5.2 and OkHttp
 4.12.0 / 5.5.0. This is not a Java 27 build/toolchain certification. The
 Java 11 HTTP transport remains covered by the regular matrix, not this smoke.
